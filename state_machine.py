@@ -108,6 +108,34 @@ class StateMachine():
         TODO: Implement this function to execute a waypoint plan
               Make sure you respect estop signal
         """
+        waypoints = [[-np.pi/2,       -0.5,      -0.3,      0.0,       0.0   ],
+                    [0.75*-np.pi/2,   0.5,       0.3,      0.0,      np.pi/2],
+                    [0.5*-np.pi/2,   -0.5,      -0.3,     np.pi/2,    0.0   ],
+                    [0.25*-np.pi/2,   0.5,       0.3,      0.0,      np.pi/2],
+                    [0.0,             0.0,       0.0,      0.0,       0.0   ],
+                    [0.25*np.pi/2,   -0.5,      -0.3,      0.0,      np.pi/2],
+                    [0.5*np.pi/2,     0.5,       0.3,     np.pi/2,    0.0   ],
+                    [0.75*np.pi/2,   -0.5,      -0.3,      0.0,      np.pi/2],
+                    [np.pi/2,         0.5,       0.3,      0.0,       0.0   ],
+                    [0.0,             0.0,       0.0,      0.0,       0.0   ]]
+
+        # send kinematics
+        print('executing...')
+        max_errors = {}
+        for wp in waypoints:
+            self.rxarm.set_positions(wp)
+            print(wp)
+            # sleep to get to waypoint\
+            rospy.sleep(3)
+            # print("error: " , list(self.rxarm.get_joint_positions()) - wp )
+            total_errors = []
+            for i in range(len(wp)):
+                diff = abs(self.rxarm.get_joint_positions()[i] - wp[i])
+                total_errors.append(diff)
+            max_errors[self.rxarm.joint_names[np.argmax(total_errors)]] = max(total_errors)
+            print('errors: ', total_errors)
+
+        print("max errors in each waypoint: ", max_errors)
         self.status_message = "State: Execute - Executing motion plan"
         self.next_state = "idle"
 

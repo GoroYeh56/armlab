@@ -240,8 +240,24 @@ class RXArmThread(QThread):
         """
         QThread.__init__(self, parent=parent)
         self.rxarm = rxarm
+        # define PID values
+        waist_PID = [640, 0, 3600]
+        shoulder_PID = [800, 0, 0]
+        elbow_PID = [800, 100, 0]
+        wrist_angle_PID = [800, 0, 0]
+        wrist_rotate_PID = [640, 0, 3600]
+        gripper_PID = [640, 0, 3600]
+        pid_gains = [waist_PID, shoulder_PID, elbow_PID, wrist_angle_PID, wrist_rotate_PID, gripper_PID]
+        # assign PID gains
+        i = 0
+        for joint in self.rxarm.joint_names:
+            self.rxarm.set_joint_position_pid_params(joint, pid_gains[i])
+            i = i + 1
+            print("joint ", joint, "pid: ", self.rxarm.get_joint_position_pid_params(joint))
         rospy.Subscriber('/rx200/joint_states', JointState, self.callback)
         rospy.sleep(0.5)
+
+
 
     def callback(self, data):
         self.rxarm.position_fb = np.asarray(data.position)[0:5]

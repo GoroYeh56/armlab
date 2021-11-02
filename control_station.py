@@ -96,6 +96,7 @@ class Gui(QMainWindow):
         self.ui.btnUser3.clicked.connect(lambda: self.rxarm.close_gripper())
         self.ui.btnUser4.setText('Execute')
         self.ui.btnUser4.clicked.connect(partial(nxt_if_arm_init, 'execute'))
+        # self.ui.btnUser4.clicked.connect(lambda: self.stat/)
 
         # Sliders
         for sldr in self.joint_sliders:

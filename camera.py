@@ -33,8 +33,8 @@ class Camera():
 
         # mouse clicks & calibration variables
         self.cameraCalibrated = False
-        self.intrinsic_matrix = np.array([])
-        self.extrinsic_matrix = np.array([])
+        self.intrinsic_matrix = np.array([[942.3094 , 0 , 637.3339] , [0 , 945.0566 , 357.1129] , [0 , 0 , 1]])
+        self.extrinsic_matrix = np.array([[-1 , 0 , -0.025] , [0 , 1 , 0.160] , [0 , 0 , 1]])
         self.last_click = np.array([0, 0])
         self.new_click = False
         self.rgb_click_points = np.zeros((5, 2), int)
@@ -143,6 +143,24 @@ class Camera():
         @param      file  The file
         """
         pass
+
+    
+    def transform_pixel_to_world(self, point):
+        """
+        @brief Transform point from pixel frame to world frame
+
+        @param point: a coordinate in pixel frame
+
+        @return a point in the world frame
+        """
+        point_3by1 = np.vstack((point.x() , point.y() , 1))
+
+        A_inv = np.linalg.inv(self.intrinsic_matrix)
+        pt_in_cam = np.matmul(A_inv , point_3by1)
+        pt_in_world = np.matmul(self.extrinsic_matrix , pt_in_cam)
+        np.delete(pt_in_world , 2)
+        return pt_in_world
+
 
     def blockDetector(self):
         """!

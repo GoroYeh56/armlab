@@ -96,7 +96,6 @@ class Gui(QMainWindow):
         self.ui.btnUser3.clicked.connect(lambda: self.rxarm.close_gripper())
         self.ui.btnUser4.setText('Execute')
         self.ui.btnUser4.clicked.connect(partial(nxt_if_arm_init, 'execute'))
-        # self.ui.btnUser4.clicked.connect(lambda: self.stat/)
 
         # Sliders
         for sldr in self.joint_sliders:
@@ -219,13 +218,13 @@ class Gui(QMainWindow):
         """
 
         pt = mouse_event.pos()
-        print(pt)
+        # print(pt)
         if self.camera.DepthFrameRaw.any() != 0:
             z = self.camera.DepthFrameRaw[pt.y()][pt.x()]
             self.ui.rdoutMousePixels.setText("(%.0f,%.0f,%.0f)" %
                                              (pt.x(), pt.y(), z))
             pt_in_world = self.camera.transform_pixel_to_world(pt)
-            print(pt_in_world)
+            # print(pt_in_world)
             self.ui.rdoutMouseWorld.setText("(%.2f,%.2f,%.2f)" %
                                             (pt_in_world[0] * 1000.0, pt_in_world[1] * 1000.0, (965.2 - z)))
 
@@ -241,6 +240,7 @@ class Gui(QMainWindow):
         self.camera.last_click[0] = pt.x()
         self.camera.last_click[1] = pt.y()
         self.camera.new_click = True
+        print("mouse press calibrate btn")
         # print(self.camera.last_click)
 
     def initRxarm(self):

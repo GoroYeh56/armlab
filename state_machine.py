@@ -147,6 +147,37 @@ class StateMachine():
         self.next_state = "idle"
 
         """TODO Perform camera calibration routine here"""
+        print("enter calibrate state")
+
+
+        pt_world = self.camera.world_apriltag_coords
+        # pt_camera = np.matmul(np.linalg.inv(self.camera.intrinsic_matrix), np.asarray(pt_pixel))
+        pt_camera = []
+        ext_matrices = []
+        for i in range(len(pt_world)) :
+            x = self.camera.tag_detections.detections[i].pose.pose.pose.position.x
+            y = self.camera.tag_detections.detections[i].pose.pose.pose.position.y
+            z = self.camera.tag_detections.detections[i].pose.pose.pose.position.z                        
+            pt_camera.append( np.array([x,y, z, 1]) )
+            # pt_camera.append(np.array([x,y]))
+            # print("pt camera[i] ", pt_camera[i])
+            pt_world[i] = np.asarray(pt_world[i])
+            # print("pt_world[i] asarray ", np.asarray(pt_world[i]))
+
+        ### 11/11 TODO : SolvePnP()
+
+        print("pt_camera: ", pt_camera)
+        print("pt_world: ",pt_world)
+        # ext_matrices.append( self.camera.getAffineTransform( np.asarray(pt_camera) , np.asarray(pt_world)) )
+        
+        ext = np.matmul ( np.asarray(pt_world).T , np.linalg.inv(np.asarray(pt_camera).T) )
+        print("extrinsic matrix:", ext)
+        for i in range(len(pt_world)):
+            print("pt ", i+1, " camera: ", pt_camera[i], " => world: ", np.matmul(ext, pt_camera[i]))
+
+        # print("extrinsic_matrix: ", ext_matrices)
+        
+        self.cameraCalibrated = True
         self.status_message = "Calibration - Completed Calibration"
 
     """ TODO """

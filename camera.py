@@ -34,11 +34,17 @@ class Camera():
         # mouse clicks & calibration variables
         self.cameraCalibrated = False
         self.intrinsic_matrix = np.array([[942.3094 , 0 , 637.3339] , [0 , 945.0566 , 357.1129] , [0 , 0 , 1]])
-        self.extrinsic_matrix = np.array([[-1 , 0 , -0.025] , [0 , 1 , 0.160] , [0 , 0 , 1]])
+        # self.extrinsic_matrix = np.array([[-1 , 0 , -0.025] , [0 , 1 , 0.160] , [0 , 0 , 1]])
+        self.extrinsic_matrix = np.array([[1 , 0 , 0] , [0 , 1 , 0] , [0 , 0 , 1]])
         self.last_click = np.array([0, 0])
         self.new_click = False
         self.rgb_click_points = np.zeros((5, 2), int)
         self.depth_click_points = np.zeros((5, 2), int)
+        self.world_apriltag_coords = [[-0.25 , -0.0025, 0.0, 1] , [0.25 , -0.0025, 0.0, 1] , [0.25 , 0.275, 0.0, 1] , [-0.25, 0.275, 0.0, 1]]
+
+        # self.world_apriltag_coords = [[-0.25 , -0.0025] , [0.25 , -0.0025] , [0.25 , 0.275] , [-0.25, 0.275]]
+        # self.world_apriltag_coords = [[-0.25 , -0.0025] , [0.25 , -0.0025]]
+        # self.world_apriltag_coords = [[-0.25 , -0.0025, 0.0] , [0.25 , -0.0025, 0.0] , [0.25 , 0.275, 0.0]]
         self.tag_detections = np.array([])
         self.tag_locations = [[-250, -25], [250, -25], [250, 275]]
         """ block info """

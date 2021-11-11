@@ -133,7 +133,14 @@ class StateMachine():
         print('executing...')
         max_errors = {}
         for wp in waypoints:
+
+            # open gripper
+            self.rxarm.open_gripper()
             self.rxarm.set_positions(wp)
+            # close the gripper
+            self.rxarm.close_gripper()
+            # TODO: for Teach & Repeat: Open -> Reach -> Close grip at every waypoint
+
             print(wp)
             # sleep to get to waypoint\
             rospy.sleep(3)

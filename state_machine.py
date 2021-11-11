@@ -5,6 +5,7 @@ from PyQt4.QtCore import (QThread, Qt, pyqtSignal, pyqtSlot, QTimer)
 import time
 import numpy as np
 import rospy
+import cv2
 
 class StateMachine():
     """!
@@ -26,17 +27,7 @@ class StateMachine():
         self.status_message = "State: Idle"
         self.current_state = "idle"
         self.next_state = "idle"
-        self.waypoints = [
-            [-np.pi/2,       -0.5,      -0.3,            0.0,       0.0],
-            [0.75*-np.pi/2,   0.5,      0.3,      0.0,       np.pi/2],
-            [0.5*-np.pi/2,   -0.5,     -0.3,     np.pi / 2,     0.0],
-            [0.25*-np.pi/2,   0.5,     0.3,     0.0,       np.pi/2],
-            [0.0,             0.0,      0.0,         0.0,     0.0],
-            [0.25*np.pi/2,   -0.5,      -0.3,      0.0,       np.pi/2],
-            [0.5*np.pi/2,     0.5,     0.3,     np.pi / 2,     0.0],
-            [0.75*np.pi/2,   -0.5,     -0.3,     0.0,       np.pi/2],
-            [np.pi/2,         0.5,     0.3,      0.0,     0.0],
-            [0.0,             0.0,     0.0,      0.0,     0.0]]
+        self.waypoints = []
 
     def set_next_state(self, state):
         """!
@@ -77,6 +68,10 @@ class StateMachine():
         if self.next_state == "manual":
             self.manual()
 
+        if self.next_state == "teach":
+            self.teach()
+
+
 
     """Functions run for each state"""
 
@@ -102,13 +97,26 @@ class StateMachine():
         self.current_state = "estop"
         self.rxarm.disable_torque()
 
+    def teach(self):
+        self.status_message = "Enter Teach state..."
+        self.current_state = "teach"
+        self.rxarm.disable_torque()
+
+
+    ### @brief Records the current joint positions to global var
+    def record_joint_angles(self):
+        self.waypoints.append(self.rxarm.get_positions())
+        print("Add waypoint: ", self.waypoints[-1])
+
     def execute(self):
         """!
         @brief      Go through all waypoints
         TODO: Implement this function to execute a waypoint plan
               Make sure you respect estop signal
         """
-        waypoints = [[-np.pi/2,       -0.5,      -0.3,      0.0,       0.0   ],
+        self.rxarm.enable_torque()
+        if len(self.waypoints) == 0:
+            waypoints = [[-np.pi/2,       -0.5,      -0.3,      0.0,       0.0   ],
                     [0.75*-np.pi/2,   0.5,       0.3,      0.0,      np.pi/2],
                     [0.5*-np.pi/2,   -0.5,      -0.3,     np.pi/2,    0.0   ],
                     [0.25*-np.pi/2,   0.5,       0.3,      0.0,      np.pi/2],
@@ -118,6 +126,8 @@ class StateMachine():
                     [0.75*np.pi/2,   -0.5,      -0.3,      0.0,      np.pi/2],
                     [np.pi/2,         0.5,       0.3,      0.0,       0.0   ],
                     [0.0,             0.0,       0.0,      0.0,       0.0   ]]
+        else:
+            waypoints = self.waypoints
 
         # send kinematics
         print('executing...')
@@ -138,6 +148,8 @@ class StateMachine():
         print("max errors in each waypoint: ", max_errors)
         self.status_message = "State: Execute - Executing motion plan"
         self.next_state = "idle"
+        self.waypoints = []
+
 
     def calibrate(self):
         """!
@@ -146,37 +158,78 @@ class StateMachine():
         self.current_state = "calibrate"
         self.next_state = "idle"
 
-        """TODO Perform camera calibration routine here"""
-        print("enter calibrate state")
+        self.status_message = "Calibrating using Apriltag locations..."
 
 
         pt_world = self.camera.world_apriltag_coords
-        # pt_camera = np.matmul(np.linalg.inv(self.camera.intrinsic_matrix), np.asarray(pt_pixel))
-        pt_camera = []
-        ext_matrices = []
+        pt_camera = np.zeros_like(pt_world)
+
+        # put apriltag locations (shown in camera frame) into an array
         for i in range(len(pt_world)) :
             x = self.camera.tag_detections.detections[i].pose.pose.pose.position.x
             y = self.camera.tag_detections.detections[i].pose.pose.pose.position.y
             z = self.camera.tag_detections.detections[i].pose.pose.pose.position.z                        
-            pt_camera.append( np.array([x,y, z, 1]) )
-            # pt_camera.append(np.array([x,y]))
-            # print("pt camera[i] ", pt_camera[i])
+            id =  self.camera.tag_detections.detections[i].id
+            pt_camera[id[0]-1] = np.array([x/z, y/z, 1])
             pt_world[i] = np.asarray(pt_world[i])
-            # print("pt_world[i] asarray ", np.asarray(pt_world[i]))
 
-        ### 11/11 TODO : SolvePnP()
+        # define parameters for solvePnP, format
+        dist_coeffs = self.camera.dist_coeffs
+        flag = 0
+        pt_camera = np.asarray(pt_camera)
 
-        print("pt_camera: ", pt_camera)
-        print("pt_world: ",pt_world)
-        # ext_matrices.append( self.camera.getAffineTransform( np.asarray(pt_camera) , np.asarray(pt_world)) )
+        # convert apriltag locations from camera frame to image frame
+        pt_image_T = np.matmul(self.camera.intrinsic_matrix , pt_camera.T)
+
+
+        print("pt_world: " , pt_world)
+        print("pt_camera: " , pt_camera)
+        print("pt_image: ", pt_image_T.T)
+
+        # delete last column of image frame points, format inputs for solvePnP
+        pt_image = pt_image_T.T
+        pt_image = np.delete(pt_image, 2, axis=1)
+        pt_world.astype(np.float64)
+        pt_image.astype(np.float64)
+
+        # find rotation and translation vectors between camera frame and world frame
+        success, Rot , trans = cv2.solvePnP(pt_world , pt_image , self.camera.intrinsic_matrix , dist_coeffs , flags=flag)
+
+        #TEST
+        #trans = trans * -1
+
+        # convert rotation vector to homogeneous rotation matrix (3 by 3)
+        Rot_3by3 , jacob = cv2.Rodrigues(Rot)
+
+        print("Rot: ", Rot)
+        print("Rot_3by3: ", Rot_3by3)
+        print("trans: ", trans)
+
+        # assemble extrinsic matrix
+        bot_row = np.array([0 , 0 , 0 , 1])
+        self.camera.extrinsic_matrix = np.vstack((np.hstack((Rot_3by3 , trans)) , bot_row))
+
+        print("EXTRINSIC: " , self.camera.extrinsic_matrix)
         
-        ext = np.matmul ( np.asarray(pt_world).T , np.linalg.inv(np.asarray(pt_camera).T) )
-        print("extrinsic matrix:", ext)
-        for i in range(len(pt_world)):
-            print("pt ", i+1, " camera: ", pt_camera[i], " => world: ", np.matmul(ext, pt_camera[i]))
+        # Add 1 to each pt in world_apriltag_coords   
+        ones = np.array([1, 1, 1, 1]).T.reshape(-1,1)
+        pt_world = np.hstack(( pt_world, ones)) 
 
-        # print("extrinsic_matrix: ", ext_matrices)
+        # verify accuracy of extrinsic matrix
+        pt_camera_verified = np.matmul(self.camera.extrinsic_matrix, pt_world.T)
+        print("Ours pt_camera: ", pt_camera_verified.T) # row by row
+        print("pt_camera from aprilTag: ", pt_camera)
         
+        
+        rot_part = self.camera.extrinsic_matrix[0:2, 0:2]
+        trans_part = self.camera.extrinsic_matrix[0:2, 3]
+        print("rot_part: ", rot_part)
+        print("trans_part: ", trans_part)
+        self.camera.extrinsic_matrix = np.vstack( ( np.hstack((rot_part, trans_part.T.reshape(2,1))) , np.array([0, 0, 1]).reshape(1,3) ) )
+        # self.camera.extrinsic_matrix[:,0] = -self.camera.extrinsic_matrix[:,0]
+        print("extrinsic matrix 3x3: ", self.camera.extrinsic_matrix)
+
+
         self.cameraCalibrated = True
         self.status_message = "Calibration - Completed Calibration"
 

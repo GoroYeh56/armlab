@@ -76,6 +76,7 @@ class RXArm(InterbotixRobot):
         self.position_fb = None
         self.velocity_fb = None
         self.effort_fb = None
+
         # DH Params
         self.dh_params = []
         self.dh_config_file = dh_config_file

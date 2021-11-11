@@ -351,6 +351,7 @@ class InterbotixRobot(object):
     def close_gripper(self, delay=1.0):
         self.gripper_controller(-self.gripper_pwm, delay)
 
+
     ### @brief Set the gripper to a different operating mode - Note: by default, the gripper starts in 'pwm' control mode
     ### @param mode - either "position", "ext_position", "velocity", "pwm", or "current" ("current" only for the ViperX robots)
     def set_gripper_operating_mode(self, mode):

@@ -132,18 +132,36 @@ class StateMachine():
         # send kinematics
         print('executing...')
         max_errors = {}
+
+
+        # TODO : 11/16 Tue : add a 'FLAG' to specify whether we are now closing: 
+        # 1: we are currently CLOSED. when we reach: we want to open
+        # 0: we are currently OPEN. When we reach: we want to close the gripper
+        state = 0 # Initially: OPEN
         for wp in waypoints:
 
+            # Note: We should set a 'flag' here for execution.
+            # If it is a 'Teach and Repeat' task: open and close gripper in between
             # open gripper
-            self.rxarm.open_gripper()
+            # self.rxarm.open_gripper()
+            # rospy.sleep(2)
             self.rxarm.set_positions(wp)
+            rospy.sleep(3.5)
+            if state==0:
+                self.rxarm.close_gripper()
+                rospy.sleep(2)
+                state = 1 # update state to CLOSED
+            else:
+                self.rxarm.open_gripper()
+                rospy.sleep(2)
+                state = 0
             # close the gripper
-            self.rxarm.close_gripper()
+            # self.rxarm.close_gripper()
             # TODO: for Teach & Repeat: Open -> Reach -> Close grip at every waypoint
 
             print(wp)
             # sleep to get to waypoint\
-            rospy.sleep(3)
+            # rospy.sleep(3)
             # print("error: " , list(self.rxarm.get_joint_positions()) - wp )
             total_errors = []
             for i in range(len(wp)):

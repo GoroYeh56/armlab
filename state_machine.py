@@ -164,6 +164,7 @@ class StateMachine():
             # rospy.sleep(2)
             self.rxarm.set_positions(wp)
             rospy.sleep(3.5)
+<<<<<<< HEAD
             if self.replay_buffer[index] == 0:
                 # just go to this waypoint; nothing required
                 pass

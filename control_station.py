@@ -100,6 +100,11 @@ class Gui(QMainWindow):
         self.ui.btnUser5.clicked.connect(partial(nxt_if_arm_init, 'teach'))
         self.ui.btnUser6.setText('Record Waypooint')
         self.ui.btnUser6.clicked.connect(partial(lambda: self.sm.record_joint_angles()))
+        self.ui.btnUser7.setText('Record Open')
+        self.ui.btnUser7.clicked.connect(partial(lambda: self.sm.record_open()))
+        self.ui.btnUser8.setText('Record Closed')
+        self.ui.btnUser8.clicked.connect(partial(lambda: self.sm.record_closed()))
+
 
         # Sliders
         for sldr in self.joint_sliders:

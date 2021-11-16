@@ -154,7 +154,10 @@ class StateMachine():
         # 1: we are currently CLOSED. when we reach: we want to open
         # 0: we are currently OPEN. When we reach: we want to close the gripper
         state = 0 # Initially: OPEN
+<<<<<<< HEAD
         index = 0
+=======
+>>>>>>> 7bccb96b3bdb19d56d3129e1f3b1b1f88d7ae744
         for wp in waypoints:
 
             # Note: We should set a 'flag' here for execution.
@@ -164,6 +167,7 @@ class StateMachine():
             # rospy.sleep(2)
             self.rxarm.set_positions(wp)
             rospy.sleep(3.5)
+<<<<<<< HEAD
             if self.replay_buffer[index] == 0:
                 # just go to this waypoint; nothing required
                 pass
@@ -173,6 +177,19 @@ class StateMachine():
             else: # close gripper
                 self.rxarm.close_gripper()
                 rospy.sleep(1)
+=======
+            if state==0:
+                self.rxarm.close_gripper()
+                rospy.sleep(2)
+                state = 1 # update state to CLOSED
+            else:
+                self.rxarm.open_gripper()
+                rospy.sleep(2)
+                state = 0
+            # close the gripper
+            # self.rxarm.close_gripper()
+            # TODO: for Teach & Repeat: Open -> Reach -> Close grip at every waypoint
+>>>>>>> 7bccb96b3bdb19d56d3129e1f3b1b1f88d7ae744
 
             print(wp)
             # sleep to get to waypoint\

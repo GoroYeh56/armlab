@@ -28,6 +28,7 @@ class StateMachine():
         self.current_state = "idle"
         self.next_state = "idle"
         self.waypoints = []
+        self.replay_buffer = []
 
     def set_next_state(self, state):
         """!
@@ -107,6 +108,21 @@ class StateMachine():
     def record_joint_angles(self):
         self.waypoints.append(self.rxarm.get_positions())
         print("Add waypoint: ", self.waypoints[-1])
+        self.replay_buffer.append(0)
+
+    ### @brief Records position for opening gripper
+    def record_open(self):
+        # add waypoint
+        self.waypoints.append(self.rxarm.get_positions())
+        self.replay_buffer.append(1)
+        print('open gripper...')
+
+    ### @brief Records position for closing gripper
+    def record_closed(self):
+        # add waypoint
+        self.waypoints.append(self.rxarm.get_positions())
+        self.replay_buffer.append(-1)
+        print('close gripper...')
 
     def execute(self):
         """!
@@ -138,6 +154,7 @@ class StateMachine():
         # 1: we are currently CLOSED. when we reach: we want to open
         # 0: we are currently OPEN. When we reach: we want to close the gripper
         state = 0 # Initially: OPEN
+        index = 0
         for wp in waypoints:
 
             # Note: We should set a 'flag' here for execution.
@@ -147,17 +164,15 @@ class StateMachine():
             # rospy.sleep(2)
             self.rxarm.set_positions(wp)
             rospy.sleep(3.5)
-            if state==0:
-                self.rxarm.close_gripper()
-                rospy.sleep(2)
-                state = 1 # update state to CLOSED
-            else:
+            if self.replay_buffer[index] == 0:
+                # just go to this waypoint; nothing required
+                pass
+            elif self.replay_buffer[index] == 1: # open
                 self.rxarm.open_gripper()
-                rospy.sleep(2)
-                state = 0
-            # close the gripper
-            # self.rxarm.close_gripper()
-            # TODO: for Teach & Repeat: Open -> Reach -> Close grip at every waypoint
+                rospy.sleep(1)
+            else: # close gripper
+                self.rxarm.close_gripper()
+                rospy.sleep(1)
 
             print(wp)
             # sleep to get to waypoint\
@@ -170,10 +185,16 @@ class StateMachine():
             max_errors[self.rxarm.joint_names[np.argmax(total_errors)]] = max(total_errors)
             print('errors: ', total_errors)
 
+            # increment index
+            index += 1
+
         print("max errors in each waypoint: ", max_errors)
         self.status_message = "State: Execute - Executing motion plan"
         self.next_state = "idle"
         self.waypoints = []
+        # clear replay buffer
+        self.replay_buffer = []
+        self.rxarm.sleep()
 
 
     def calibrate(self):

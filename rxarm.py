@@ -11,9 +11,10 @@ The RXArm class contains:
 
 You will upgrade some functions and also implement others according to the comments given in the code.
 """
+from sys import path_importer_cache
 import numpy as np
 from functools import partial
-from kinematics import FK_dh, FK_pox, get_pose_from_T
+from kinematics import FK_dh, FK_pox, get_pose_from_T, get_euler_angles_from_T
 import time
 import csv
 from builtins import super
@@ -23,6 +24,10 @@ from interbotix_descriptions import interbotix_mr_descriptions as mrd
 from config_parse import *
 from sensor_msgs.msg import JointState
 import rospy
+
+
+from math import cos, sin 
+
 """
 TODO: Implement the missing functions and add anything you need to support them
 """
@@ -189,8 +194,63 @@ class RXArm(InterbotixRobot):
         @brief      TODO Get the EE pose.
 
         @return     The EE pose as [x, y, z, phi] or as needed.
+
+        @return     The EE pose as [x, y, z, phi, Theta, Psi] or as needed.
         """
-        return [0, 0, 0, 0]
+        # 3.2 TODO: Use DH table peform Forward Kinematics Transformation
+
+        # Load DH for each frame (pass in control_station.py), use 
+        # self.dh_params (a numpy array 5*4)
+        # each row: a, alpha, d, theta for each joint
+        # joint: 0 ~ 4
+
+        # H01 => theta = 1 
+        # H = np.array(shape=(5, 4,4 ))
+        # Compute H01, H12, H23, H34, H4e ( H01: From 0 to 1 )
+        Hs = []
+        for i in range(self.dh_params.shape[0]): # 5x4 iterate for 5 joints
+            a = self.dh_params[i][0]
+            alpha = self.dh_params[i][1]
+            d = self.dh_params[i][2]
+            theta = self.dh_params[i][3]
+
+            # Make H 0-> 1 4x4 HTM
+            H = np.array([cos(theta), -sin(theta)*cos(alpha), sin(theta)*sin(alpha), a*cos(theta)],
+                         [sin(theta),  cos(theta)*cos(alpha),  -cos(theta)*sin(alpha), a*sin(theta)],
+                         [         0,             sin(alpha),    cos(alpha),        d],
+                         [         0,                      0,             0,        1])
+            Hs.append(H)
+
+        H01 = Hs[0]
+        H12 = Hs[1]
+        H23 = Hs[2]
+        H34 = Hs[3]
+        H4e = Hs[4]
+        # numpy.array so we can use @ !
+        
+        # He0 = inv(H01@H12@H23@H34@H4e)
+        H0e =  H01 @ H12 @ H23 @ H34 @ H4e
+        Rotation = H0e[0:3, 0:3]
+        Translation = H0e[0:3, 3]
+        x = Translation[0]
+        y = Translation[1]
+        z = Translation[2]
+
+
+        phi = Rotation[0]
+        theta = Rotation[1]
+        psi = Rotation[2]
+
+        euler_angles = get_euler_angles_from_T(H0e)
+        phi = euler_angles[0][2]
+        theta = euler_angles[1][1]
+        psi = euler_angles[2][2]
+        
+        # He0 = np.linalg.inv( H01 @ H12 @ H23 @ H34 @ H4e)
+        # convert He0 to quaternion?
+        # Then ZYZ Euler Angle Representation
+        return [x, y, z, phi, theta, psi]
+        # return [0, 0, 0, 0]
 
     @_ensure_initialized
     def get_wrist_pose(self):

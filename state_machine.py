@@ -28,7 +28,7 @@ class StateMachine():
         self.current_state = "idle"
         self.next_state = "idle"
         self.waypoints = []
-        self.replay_buffer = []
+        self.replay_buffer = [] # a buffer to check whether it is a "intermediate waypoint":0, "should close gripper":-1, "should open gripper":1
 
     def set_next_state(self, state):
         """!

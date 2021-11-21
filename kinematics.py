@@ -8,7 +8,7 @@ There are some functions to start with, you may need to implement a few more
 import numpy as np
 # expm is a matrix exponential function
 from scipy.linalg import expm
-
+from scipy.spatial.transform import Rotation as R
 
 def clamp(angle):
     """!
@@ -73,6 +73,14 @@ def get_euler_angles_from_T(T):
 
     @return     The euler angles from T.
     """
+
+    # T : 4x4
+    Rotation = T[0:3, 0:3]
+    r = R.from_rotvec(Rotation)
+    r = R.as_euler('zyz', degress=False) # False: use radian
+    print("r ", r)
+    return r # a 3x3 matrix
+
     pass
 
 

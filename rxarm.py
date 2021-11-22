@@ -26,7 +26,7 @@ from sensor_msgs.msg import JointState
 import rospy
 
 
-from math import cos, sin 
+from math import cos, sin, radians, degrees
 
 """
 TODO: Implement the missing functions and add anything you need to support them
@@ -84,9 +84,16 @@ class RXArm(InterbotixRobot):
 
         # DH Params
         self.dh_params = []
+        # self.dh_params = np.array([])
         self.dh_config_file = dh_config_file
         if (dh_config_file is not None):
-            self.dh_params = RXArm.parse_dh_param_file(dh_config_file)
+            print("df file: ", dh_config_file)
+            self.dh_params = RXArm.parse_dh_param_file(self)
+
+
+
+
+            
         #POX params
         self.M_matrix = []
         self.S_list = []
@@ -204,21 +211,51 @@ class RXArm(InterbotixRobot):
         # each row: a, alpha, d, theta for each joint
         # joint: 0 ~ 4
 
+        # a, alpha: w.r.t the old one (diff between Z axes)
+        # d, theta: w.r.t the new one (diff between X axes)
+
+        # Get current positions
+        current_positions = self.get_positions()
+        # first angle is theta 1
+
         # H01 => theta = 1 
         # H = np.array(shape=(5, 4,4 ))
         # Compute H01, H12, H23, H34, H4e ( H01: From 0 to 1 )
         Hs = []
-        for i in range(self.dh_params.shape[0]): # 5x4 iterate for 5 joints
+        print("dh: ", self.dh_params)
+        for i in range(len(self.dh_params)): # 5x4 iterate for 5 joints
+            
             a = self.dh_params[i][0]
+            # convert a from mm to m
+            a = a / 1000.0
+            
             alpha = self.dh_params[i][1]
+            # convert alpha from degrees to radians
+            alpha = radians(alpha)
+            
             d = self.dh_params[i][2]
+            # convert d from mm to m
+            d = d / 1000.0
+            
             theta = self.dh_params[i][3]
+            if i == 0:
+                theta = degrees(current_positions[1]) + 90 
+            elif i==1:
+                theta =  degrees(current_positions[2]) + 90
+            elif i==2:
+                theta = degrees(current_positions[3])  
+            elif i==3:
+                theta = degrees(current_positions[4]) - 90                 
+
+
+            # convert theta from degrees to radians
+            theta = radians(theta)
 
             # Make H 0-> 1 4x4 HTM
-            H = np.array([cos(theta), -sin(theta)*cos(alpha), sin(theta)*sin(alpha), a*cos(theta)],
+            H = np.array([[cos(theta), -sin(theta)*cos(alpha), sin(theta)*sin(alpha), a*cos(theta)],
                          [sin(theta),  cos(theta)*cos(alpha),  -cos(theta)*sin(alpha), a*sin(theta)],
                          [         0,             sin(alpha),    cos(alpha),        d],
-                         [         0,                      0,             0,        1])
+                         [         0,                      0,             0,        1]])
             Hs.append(H)
 
         H01 = Hs[0]
@@ -229,19 +266,19 @@ class RXArm(InterbotixRobot):
         # numpy.array so we can use @ !
         
         # He0 = inv(H01@H12@H23@H34@H4e)
-        H0e =  H01 @ H12 @ H23 @ H34 @ H4e
-        Rotation = H0e[0:3, 0:3]
-        Translation = H0e[0:3, 3]
+        H0e =  np.matmul(np.matmul(np.matmul(np.matmul(H01, H12), H23), H34), H4e)
+        # print(H0e)
+        print(np.linalg.inv(H0e))
+        # Rotation = H0e[0:3, 0:3]
+        # Translation = H0e[0:3, 3]
+        He0 = np.linalg.inv(H0e)
+        Translation = He0[0:3, 3]
         x = Translation[0]
         y = Translation[1]
         z = Translation[2]
+        print("x, y, z", x, y, z)
 
-
-        phi = Rotation[0]
-        theta = Rotation[1]
-        psi = Rotation[2]
-
-        euler_angles = get_euler_angles_from_T(H0e)
+        euler_angles = get_euler_angles_from_T(He0)
         phi = euler_angles[0][2]
         theta = euler_angles[1][1]
         psi = euler_angles[2][2]
@@ -271,7 +308,7 @@ class RXArm(InterbotixRobot):
 
     def parse_dh_param_file(self):
         print("Parsing DH config file...")
-        parse_dh_param_file(self.dh_config_file)
+        dh_params = parse_dh_param_file(self.dh_config_file)
         print("DH config file parse exit.")
         return dh_params
 

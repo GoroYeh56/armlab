@@ -76,9 +76,14 @@ def get_euler_angles_from_T(T):
 
     # T : 4x4
     Rotation = T[0:3, 0:3]
+    # print("Rotation: ", Rotation)
+
     r = R.from_rotvec(Rotation)
-    r = R.as_euler('zyz', degress=False) # False: use radian
-    print("r ", r)
+    # print("r: ", r) 
+    
+    r = r.as_euler('zyz', degrees=False) # False: use radian
+    # print("r ", r)
+
     return r # a 3x3 matrix
 
     pass

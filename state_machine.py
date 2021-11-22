@@ -142,6 +142,10 @@ class StateMachine():
                     [0.75*np.pi/2,   -0.5,      -0.3,      0.0,      np.pi/2],
                     [np.pi/2,         0.5,       0.3,      0.0,       0.0   ],
                     [0.0,             0.0,       0.0,      0.0,       0.0   ]]
+
+            for _ in range(len(waypoints)):
+                self.replay_buffer.append(0)
+
         else:
             waypoints = self.waypoints
 

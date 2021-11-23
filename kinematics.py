@@ -6,6 +6,7 @@ There are some functions to start with, you may need to implement a few more
 """
 
 import numpy as np
+from math import atan2, pi
 # expm is a matrix exponential function
 from scipy.linalg import expm
 from scipy.spatial.transform import Rotation as R
@@ -78,13 +79,13 @@ def get_euler_angles_from_T(T):
     Rotation = T[0:3, 0:3]
     # print("Rotation: ", Rotation)
 
-    r = R.from_rotvec(Rotation)
+    dcm = R.from_dcm(Rotation)
     # print("r: ", r) 
     
-    r = r.as_euler('zyz', degrees=False) # False: use radian
+    euler_angles = dcm.as_euler('zyz', degrees=False) # False: use radian
     # print("r ", r)
 
-    return r # a 3x3 matrix
+    return euler_angles # a 3x3 matrix
 
     pass
 
@@ -135,6 +136,22 @@ def to_s_matrix(w, v):
     pass
 
 
+def pose_ik_elbow_up(pose, orientation, dh_params):
+    x,y,z = pose
+
+    theta0 =  atan2(y,x)
+    theta0_2 = pi + atan2(y,x)
+
+    
+    # return 2 possible joint configurations (2 x 5 np.array)
+    pass
+
+def pose_ik_elbow_down(pose, orientation, dh_params):
+
+
+    # return 2 possible joint configurations
+    pass
+
 def IK_geometric(dh_params, pose):
     """!
     @brief      Get all possible joint configs that produce the pose.
@@ -147,4 +164,24 @@ def IK_geometric(dh_params, pose):
     @return     All four possible joint configurations in a numpy array 4x4 where each row is one possible joint
                 configuration
     """
-    pass
+    
+    joint_configs = np.zeros(shape=(4,5)) # 4x5
+
+
+    # 
+    x, y, z, theta, phi, psi = pose
+    p = (x, y, z)
+    ori = (theta, phi, psi)
+    el_up = pose_ik_elbow_up(p,
+                             ori,
+                             dh_params= dh_params)
+    # return 2x5 array
+
+    el_down = pose_ik_elbow_down(p,
+                             ori,
+                             dh_params= dh_params)
+    # return 2x5 array
+
+    joint_configs = np.array([el_up,  el_down])
+
+    return joint_configs

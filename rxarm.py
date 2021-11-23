@@ -216,14 +216,15 @@ class RXArm(InterbotixRobot):
 
         # Get current positions
         current_positions = self.get_positions()
+        # print("cur positions: ", current_positions)
         # first angle is theta 1
 
         # H01 => theta = 1 
         # H = np.array(shape=(5, 4,4 ))
         # Compute H01, H12, H23, H34, H4e ( H01: From 0 to 1 )
         Hs = []
-        print("dh: ", self.dh_params)
-        for i in range(len(self.dh_params)): # 5x4 iterate for 5 joints
+        # print("dh: ", self.dh_params)
+        for i in range(len(self.dh_params)): # 6x4 iterate for 5 joints
             
             a = self.dh_params[i][0]
             # convert a from mm to m
@@ -238,50 +239,57 @@ class RXArm(InterbotixRobot):
             d = d / 1000.0
             
             theta = self.dh_params[i][3]
-            if i == 0:
-                theta = degrees(current_positions[1]) + 90 
-            elif i==1:
-                theta =  degrees(current_positions[2]) + 90
-            elif i==2:
-                theta = degrees(current_positions[3])  
+            if i == 0: # World to base: use cur_position[0]
+                theta = degrees(current_positions[0])
+            elif i==1: # Base to Sholder: constant 90 degree
+                theta = 90 
+            elif i==2: # Sholder to elbow
+                theta =  degrees(current_positions[1]) - (90 - degrees(np.arctan(1/4))) 
             elif i==3:
-                theta = degrees(current_positions[4]) - 90                 
-
+                theta =  degrees(current_positions[2]) - (90 - degrees(np.arctan(1/4))) 
+            elif i==4: 
+                theta = degrees(current_positions[3]) + 90                 
+            elif i==5: # Wrist to ee : constant 0 degree
+                pass
 
             # convert theta from degrees to radians
             theta = radians(theta)
 
+            # print("i ", i, " a, alpha, d, theta, ", a," ", alpha, " ", d , " ", theta)
+
             # Make H 0-> 1 4x4 HTM
-            H = np.array([[cos(theta), -sin(theta)*cos(alpha), sin(theta)*sin(alpha), a*cos(theta)],
+            H = np.array([[cos(theta), -sin(theta)*cos(alpha), sin(theta)*sin(alpha),  a*cos(theta)],
                          [sin(theta),  cos(theta)*cos(alpha),  -cos(theta)*sin(alpha), a*sin(theta)],
                          [         0,             sin(alpha),    cos(alpha),        d],
                          [         0,                      0,             0,        1]])
             Hs.append(H)
+        # while True:
+        #     pass
 
-        H01 = Hs[0]
-        H12 = Hs[1]
-        H23 = Hs[2]
-        H34 = Hs[3]
-        H4e = Hs[4]
+        HW0 = Hs[0]
+        H01 = Hs[1]
+        H12 = Hs[2]
+        H23 = Hs[3]
+        H34 = Hs[4]
+        H4e = Hs[5]
         # numpy.array so we can use @ !
         
-        # He0 = inv(H01@H12@H23@H34@H4e)
-        H0e =  np.matmul(np.matmul(np.matmul(np.matmul(H01, H12), H23), H34), H4e)
-        # print(H0e)
-        print(np.linalg.inv(H0e))
-        # Rotation = H0e[0:3, 0:3]
-        # Translation = H0e[0:3, 3]
-        He0 = np.linalg.inv(H0e)
-        Translation = He0[0:3, 3]
+        Hwe =  np.matmul(np.matmul(np.matmul(np.matmul(np.matmul(HW0,H01), H12), H23), H34), H4e)
+
+        # print("Final H world to ee: ", Hwe)
+        Translation = Hwe[0:3, 3]
         x = Translation[0]
         y = Translation[1]
         z = Translation[2]
-        print("x, y, z", x, y, z)
+        # print("x, y, z", x, y, z)
 
-        euler_angles = get_euler_angles_from_T(He0)
-        phi = euler_angles[0][2]
-        theta = euler_angles[1][1]
-        psi = euler_angles[2][2]
+        # while True:
+        #     pass
+
+        euler_angles = get_euler_angles_from_T(Hwe)
+        phi = euler_angles[0]
+        theta = euler_angles[1]
+        psi = euler_angles[2]
         
         # He0 = np.linalg.inv( H01 @ H12 @ H23 @ H34 @ H4e)
         # convert He0 to quaternion?

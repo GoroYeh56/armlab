@@ -6,7 +6,7 @@ There are some functions to start with, you may need to implement a few more
 """
 
 import numpy as np
-from math import atan2, pi, acos, sqrt, cos, sin
+from math import atan2, pi, acos, sqrt, cos, sin, degrees, radians
 # expm is a matrix exponential function
 from scipy.linalg import expm
 from scipy.spatial.transform import Rotation as R
@@ -45,7 +45,78 @@ def FK_dh(dh_params, joint_angles, link):
 
     @return     a transformation matrix representing the pose of the desired link
     """
-    pass
+
+    # Load DH for each frame (pass in control_station.py), use 
+    # self.dh_params (a numpy array 5*4)
+    # each row: a, alpha, d, theta for each joint
+    # joint: 0 ~ 4
+
+    # a, alpha: w.r.t the old one (diff between Z axes)
+    # d, theta: w.r.t the new one (diff between X axes)
+
+    # Get current positions
+    current_positions = joint_angles
+    # print("cur positions: ", current_positions)
+    # first angle is theta 1
+
+    # H01 => theta = 1 
+    # H = np.array(shape=(5, 4,4 ))
+    # Compute H01, H12, H23, H34, H4e ( H01: From 0 to 1 )
+    Hs = []
+    # print("dh: ", self.dh_params)
+    for i in range(len(dh_params)): # 6x4 iterate for 5 joints
+        
+        a = dh_params[i][0]
+        # convert a from mm to m
+        a = a / 1000.0
+        
+        alpha = dh_params[i][1]
+        # convert alpha from degrees to radians
+        alpha = radians(alpha)
+        
+        d = dh_params[i][2]
+        # convert d from mm to m
+        d = d / 1000.0
+        
+        theta = dh_params[i][3]
+        if i == 0: # World to base: use cur_position[0]
+            theta = degrees(current_positions[0])
+        elif i==1: # Base to Sholder: constant 90 degree
+            theta = 90 
+        elif i==2: # Sholder to elbow
+            theta =  degrees(current_positions[1]) - (90 - degrees(np.arctan(1/4))) 
+        elif i==3:
+            theta =  degrees(current_positions[2]) - (90 - degrees(np.arctan(1/4))) 
+        elif i==4: 
+            theta = degrees(current_positions[3]) + 90                 
+        elif i==5: # Wrist to ee : constant 0 degree
+            pass
+
+        # convert theta from degrees to radians
+        theta = radians(theta)
+
+        # print("i ", i, " a, alpha, d, theta, ", a," ", alpha, " ", d , " ", theta)
+
+        # Make H 0-> 1 4x4 HTM
+        H = np.array([[cos(theta), -sin(theta)*cos(alpha), sin(theta)*sin(alpha),  a*cos(theta)],
+                        [sin(theta),  cos(theta)*cos(alpha),  -cos(theta)*sin(alpha), a*sin(theta)],
+                        [         0,             sin(alpha),    cos(alpha),        d],
+                        [         0,                      0,             0,        1]])
+        Hs.append(H)
+    # while True:
+    #     pass
+
+    HW0 = Hs[0]
+    H01 = Hs[1]
+    H12 = Hs[2]
+    H23 = Hs[3]
+    H34 = Hs[4]
+    H4e = Hs[5]
+    # numpy.array so we can use @ !
+    
+    Hwe =  np.matmul(np.matmul(np.matmul(np.matmul(np.matmul(HW0,H01), H12), H23), H34), H4e)
+
+    return Hwe
 
 
 def get_transform_from_dh(a, alpha, d, theta):
@@ -101,7 +172,13 @@ def get_pose_from_T(T):
 
     @return     The pose from T.
     """
-    pass
+    x = T[0, 3]
+    y = T[1, 3]
+    z = T[2, 3]
+    euler_angles = get_euler_angles_from_T(T)
+    pose = [x, y, z, euler_angles[0], euler_angles[1], euler_angles[2]]
+
+    return pose
 
 
 def FK_pox(joint_angles, m_mat, s_lst):
@@ -152,7 +229,7 @@ def pose_ik_elbow_up(pose, orientation, dh_params):
         [y],
         [z]
     ])
-    print('o = ', o)
+    # print('o = ', o)
 
     # Read in joint lengths (l1, l2, ... l6)
     l1 = 205.73 / 1000 # might have to change this based on the slight offset from joint 1 to 2
@@ -164,7 +241,7 @@ def pose_ik_elbow_up(pose, orientation, dh_params):
     print(R[:, 2])
     o_c = np.add(o, -l6 * R[:, 2].reshape(-1, 1)) # 3rd column
     x_c = o_c[0] 
-    print('o_c = ', o_c)
+    # print('o_c = ', o_c)
     y_c = o_c[1] 
     z_c = o_c[2]
 
@@ -246,8 +323,8 @@ def IK_geometric(dh_params, pose):
     el_up = pose_ik_elbow_up(p,
                              ori,
                              dh_params= dh_params)
-    print('joints up = ', el_up)
-    print('done joints')
+    # print('joints up = ', el_up)
+    # print('done joints')
     # return 2x5 array
 
     el_down = pose_ik_elbow_down(p,

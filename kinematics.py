@@ -6,7 +6,7 @@ There are some functions to start with, you may need to implement a few more
 """
 
 import numpy as np
-from math import atan2, pi
+from math import atan2, pi, acos, sqrt, cos, sin
 # expm is a matrix exponential function
 from scipy.linalg import expm
 from scipy.spatial.transform import Rotation as R
@@ -138,19 +138,90 @@ def to_s_matrix(w, v):
 
 def pose_ik_elbow_up(pose, orientation, dh_params):
     x,y,z = pose
+    theta, phi, psi = orientation
 
-    theta0 =  atan2(y,x)
-    theta0_2 = pi + atan2(y,x)
+    # Find R using euler angles (slide 25)
+    R = np.array([
+        [cos(phi)*cos(theta)*cos(psi) - sin(phi)*sin(psi), -cos(phi)*cos(theta)*sin(psi) - sin(phi)*cos(psi), cos(phi)*sin(theta)],
+        [sin(phi)*cos(theta)*cos(psi) + cos(phi)*sin(psi), -sin(phi)*cos(theta)*sin(psi) + cos(phi)*cos(psi), sin(phi)*sin(theta)],
+        [-sin(theta)*cos(psi), sin(theta)*sin(psi), cos(theta)]
+    ])
+    # o is just the x, y, z position of the goal from the start (slide 17)
+    o = np.array([
+        [x],
+        [y],
+        [z]
+    ])
+    print('o = ', o)
 
+    # Read in joint lengths (l1, l2, ... l6)
+    l1 = 205.73 / 1000 # might have to change this based on the slight offset from joint 1 to 2
+    l2 = 200 / 1000 
+    # Define l6 -> distance from wrist to end effector
+    l6 = 174.15 / 1000
+
+    # Find o_c (slide 19 of IK lecture)
+    print(R[:, 2])
+    o_c = np.add(o, -l6 * R[:, 2].reshape(-1, 1)) # 3rd column
+    x_c = o_c[0] 
+    print('o_c = ', o_c)
+    y_c = o_c[1] 
+    z_c = o_c[2]
+
+    ## Use 2D planar IK solution to find other joints
+
+    # Find theta 0 (slide 20)
+    theta1_1 =  atan2(y_c, x_c)
+    theta1_2 = pi + atan2(y_c, x_c)
+
+    # Find 2 solutions for theta 3 (slide 9) --> is theta 2 in slides
+    theta3_1 = acos(((x_c**2 + y_c**2) - l1**2 - l2**2) / 2*l1*l2)
+    theta3_2 = -theta3_1
+
+    # theta2_1 is elbow up
+    # theta2_2 is elbow down
+
+    # Find theta 2 based on theta 2 (slide 9) --> is theta 1 in slides
+    theta2_1 = atan2(y_c, x_c) - atan2(l2*sin(theta3_1), l1+l2*cos(theta3_1))
+    theta2_2 = atan2(y_c, x_c) - atan2(l2*sin(theta3_2), l1+l2*cos(theta3_2))
+
+    # Now that we have theta 1, 2, and 3, we can find orientation of the wrist R_3^0 using forward kinematics (slide 24)
+
+    # Let's do for elbow up first
+    c1 = cos(theta1_1)
+    c23 = cos(theta2_1 + theta3_1)
+    s23 = sin(theta2_1 + theta3_1)
+    s1 = sin(theta1_1)
+    # Calculate R_3^0 (slide 24)
+    R_3_0 = np.array([
+        [c1*c23, -c1*s23, s1],
+        [s1*c23, -s1*s23, -c1],
+        [s23, c23, 0]
+    ])
+    # Calculate R_6^3
+    R_6_3 = np.matmul(np.transpose(R_3_0), R)
+
+    # Get theta 4, 5, and 6 from R_6_3
+    theta_4_1 = atan2(R_6_3[1, 2], R_6_3[0, 2])
+    theta_5_1 = atan2(sqrt(1 - R_6_3[2, 2]**2), R_6_3[2, 2])
+    theta_5_2 = atan2(-sqrt(1 - R_6_3[2, 2]**2), R_6_3[2, 2])
+    theta_6_1 = atan2(R_6_3[2, 1], -R_6_3[2, 0])
+
+    # arrange results into matrix
+    possible_joint_configs = np.array([
+        [theta1_1, theta2_1, theta3_1, theta_4_1, theta_5_1, theta_6_1],
+        [theta1_2, theta2_2, theta3_2, theta_4_1, theta_5_2, theta_6_1]
+    ])
     
     # return 2 possible joint configurations (2 x 5 np.array)
-    pass
+    return possible_joint_configs
 
 def pose_ik_elbow_down(pose, orientation, dh_params):
 
 
     # return 2 possible joint configurations
-    pass
+    possible_joint_configs = np.zeros([2, 6])
+    return possible_joint_configs
 
 def IK_geometric(dh_params, pose):
     """!
@@ -169,19 +240,23 @@ def IK_geometric(dh_params, pose):
 
 
     # 
-    x, y, z, theta, phi, psi = pose
+    x, y, z, phi, theta, psi = pose
     p = (x, y, z)
     ori = (theta, phi, psi)
     el_up = pose_ik_elbow_up(p,
                              ori,
                              dh_params= dh_params)
+    print('joints up = ', el_up)
+    print('done joints')
     # return 2x5 array
 
     el_down = pose_ik_elbow_down(p,
                              ori,
                              dh_params= dh_params)
     # return 2x5 array
+    # print(el_down.shape)
 
-    joint_configs = np.array([el_up,  el_down])
+    # joint_configs = np.array([el_up,  el_down])
+    joint_configs = np.stack((el_up, el_down))
 
     return joint_configs

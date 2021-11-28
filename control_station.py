@@ -61,6 +61,7 @@ class Gui(QMainWindow):
         """Objects Using Other Classes"""
         self.camera = Camera()
         print("Creating rx arm...")
+        print('dh config file in control station = ', dh_config_file)
         if (dh_config_file is not None):
             self.rxarm = RXArm(dh_config_file=dh_config_file)
         else:
@@ -266,6 +267,7 @@ def main(args=None):
     @brief      Starts the GUI
     """
     app = QApplication(sys.argv)
+    print('args we pass in = ', args['dhconfig'])
     app_window = Gui(dh_config_file=args['dhconfig'])
     app_window.show()
     sys.exit(app.exec_())

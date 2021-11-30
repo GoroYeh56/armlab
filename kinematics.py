@@ -116,6 +116,8 @@ def FK_dh(dh_params, joint_angles, link):
     
     Hwe =  np.matmul(np.matmul(np.matmul(np.matmul(np.matmul(HW0,H01), H12), H23), H34), H4e)
 
+    # H3e = np.matmul(H34, H4e)
+
     return Hwe
 
 
@@ -148,15 +150,49 @@ def get_euler_angles_from_T(T):
 
     # T : 4x4
     Rotation = T[0:3, 0:3]
+    print('original R = ', Rotation)
+    print()
+
+    # FK slides 25 
+    cos_theta = Rotation[2,2]
+    if cos_theta >= 0:
+        sin_theta = -sqrt(1 - cos_theta*cos_theta)
+    else:
+        sin_theta = sqrt(1 - cos_theta*cos_theta)
+
+    if sin_theta >= 0:
+        phi = atan2(Rotation[1,2], Rotation[0,2])
+        psi = atan2(Rotation[2,1], -Rotation[2,0])
+    else:
+        phi = atan2(-Rotation[1,2], -Rotation[0,2])
+        psi = atan2(-Rotation[2,1], Rotation[2,0])     
+
+    theta = atan2(sin_theta, cos_theta)    
+
+    # calculate R again
+    newR = np.array([
+        [cos(phi)*cos(theta)*cos(psi) - sin(phi)*sin(psi), -cos(phi)*cos(theta)*sin(psi) - sin(phi)*cos(psi), cos(phi)*sin(theta)],
+        [sin(phi)*cos(theta)*cos(psi) + cos(phi)*sin(psi), -sin(phi)*cos(theta)*sin(psi) + cos(phi)*cos(psi), sin(phi)*sin(theta)],
+        [-sin(theta)*cos(psi), sin(theta)*sin(psi), cos(theta)]
+    ])
+
+    print('new R = ', newR)
+    print()
+
+    # get 5 joints positions
+    # joint_positions = self.rxarm.get_positions()
+
+
     # print("Rotation: ", Rotation)
-
-    dcm = R.from_dcm(Rotation)
+    # print("Rotation type: ", type(Rotation))
+    # dcm = R.from_dcm(Rotation)
     # print("r: ", r) 
-    
-    euler_angles = dcm.as_euler('zyz', degrees=False) # False: use radian
-    # print("r ", r)
+    # r =  R.from_rotvec(Rotation)
+    # euler_angles = dcm.as_euler('zyz', degrees=False) # False: use radian
+ 
+    euler_angles = np.array([phi, theta, psi])
 
-    return euler_angles # a 3x3 matrix
+    return euler_angles # a 3x1 matrix
 
     pass
 
@@ -176,6 +212,13 @@ def get_pose_from_T(T):
     y = T[1, 3]
     z = T[2, 3]
     euler_angles = get_euler_angles_from_T(T)
+        
+    # joint_positions = self.get_positions()
+    # phi = joint_positions[0] + np.pi/2
+    # theta = joint_positions[4]
+    # psi = joint_positions[1] - joint_positions[2] - joint_positions[3]
+
+
     pose = [x, y, z, euler_angles[0], euler_angles[1], euler_angles[2]]
 
     return pose
@@ -213,7 +256,144 @@ def to_s_matrix(w, v):
     pass
 
 
+def wrap_to_pi(angle):
+    # restrict between [-pi , pi]
+    if angle > pi:
+        while angle > pi:
+            angle -= 2*pi
+    if angle < -pi:
+        while angle < -pi:
+            angle += 2*pi
+            
+    return angle
+
 def pose_ik_elbow_up(pose, orientation, dh_params):
+    x,y,z = pose
+    theta, phi, psi = orientation
+
+    # Find R using euler angles (slide 25)
+    R = np.array([
+        [cos(phi)*cos(theta)*cos(psi) - sin(phi)*sin(psi), -cos(phi)*cos(theta)*sin(psi) - sin(phi)*cos(psi), cos(phi)*sin(psi+pi/2)],
+        [sin(phi)*cos(theta)*cos(psi) + cos(phi)*sin(psi), -sin(phi)*cos(theta)*sin(psi) + cos(phi)*cos(psi), sin(phi)*sin(psi+pi/2)],
+        [-sin(theta)*cos(psi), sin(theta)*sin(psi), cos(psi+pi/2)] # NOte: The 3rd column Theta changes to psi+pi/2
+    ])
+    # o is just the x, y, z position of the goal from the start (slide 17)
+    o = np.array([
+        [x],
+        [y],
+        [z]
+    ])
+    # print('o = ', o)
+
+    # Read in joint lengths (l1, l2, ... l6)
+    l1 = 205.73 / 1000 # might have to change this based on the slight offset from joint 1 to 2
+    l2 = 200.00 / 1000 
+    # Define l6 -> distance from wrist to end effector
+    l6 = 174.15 / 1000
+
+    # Find o_c (slide 19 of IK lecture)
+    # print(R[:, 2])
+
+    print("R 3rd column ", R[:,2])
+    o_c = np.add(o, -l6 * R[:, 2].reshape(-1, 1)) # 3rd column
+
+    print("oc: ",o_c)
+    x_c = o_c[0].item(0)
+    print('o_c = ', o_c)
+    y_c = o_c[1].item(0)
+    z_c = o_c[2].item(0)
+    print('zc = ', z_c)
+    z_c = z_c - (103.91/1000)
+
+    ## Use 2D planar IK solution to find other joints
+
+    # Find theta 0 (slide 20)
+    theta0 = atan2(y_c, x_c) - pi/2
+    theta0_w_pi = pi + theta0
+
+    # print("x_c type: ",type(x_c))
+    # print("x_c: ", x_c)
+    # print("x_c shape: ", x_c.shape)
+    # print("sqrt: ",sqrt(x_c**2 + y_c**2) )
+    # print(" l1**2 - l2**2 ", l1**2 - l2**2)
+    # print("l1 ", l1)
+    # print("l2 ", l2)
+    # print("type: ", type(l1), type(l2))
+    
+    # print(" 2*l1*l2 ", 2*l1*l2)
+    # print("numerator: ",((sqrt(x_c**2 + y_c**2) + z_c**2) - l1**2 - l2**2))
+
+    # Find 2 solutions for theta 2 (slide 9) --> is theta 2 in slides
+    # print('inside: ', ((sqrt(x_c**2 + y_c**2) + z_c**2) - l1**2 - l2**2) / 2*l1*l2  )
+    theta2 = acos(((sqrt(x_c**2 + y_c**2) + z_c**2) - l1**2 - l2**2) / 2*l1*l2)
+    # theta2 is elbow up, we get NEGATIVE theta2_calculated (we are in elbow up)
+    # theta2 = atan2(200,50) - theta2 # theta2 would be smaller than atan2(4) 
+    theta2 = pi/2 - theta2
+    # Find theta 1 based on theta 2 (slide 9) --> is theta 1 in slides
+    print("z_c, x_c, y_c ", z_c, x_c, y_c)
+    print("term1 ",atan2(z_c, sqrt(x_c**2 + y_c**2)))
+    print("theta2 ", theta2)
+    print("l2*sin2 l1+l2*cos2 ", l2*sin(theta2), l1+l2*cos(theta2))
+    print("term2 ",atan2(l2*sin(theta2), l1+l2*cos(theta2))  )
+
+    theta1 = atan2(z_c, sqrt(x_c**2 + y_c**2)) - atan2(l2*sin(theta2), l1+l2*cos(theta2)) 
+
+    ##### Problem Here ! #####
+    theta1 = atan2(200,50) + theta1 # handle offset
+
+    # Now that we have theta 0, 1, and 2, we can find orientation of the wrist R_3^0 using forward kinematics (slide 24)
+
+    # Let's do for elbow up first
+    c1 = cos(theta0)
+    c1_w_pi = cos(theta0_w_pi)
+    c23 = cos(theta1 + theta2)
+    s23 = sin(theta1 + theta2)
+    s1 = sin(theta0)
+    s1_w_pi = sin(theta0_w_pi)
+    # Calculate R_3^0 (slide 24)
+    R_3_0 = np.array([
+        [c1*c23, -c1*s23, s1],
+        [s1*c23, -s1*s23, -c1],
+        [s23, c23, 0]
+    ])
+    # Calculate with pi offset
+    R_3_0_w_pi = np.array([
+        [c1_w_pi*c23, -c1_w_pi*s23, s1_w_pi],
+        [s1_w_pi*c23, -s1_w_pi*s23, -c1_w_pi],
+        [s23, c23, 0]
+    ])
+    # Calculate R_6^3
+    R_6_3 = np.matmul(np.transpose(R_3_0), R)
+    R_6_3_w_pi = np.matmul(np.transpose(R_3_0_w_pi), R)
+
+    # Get theta 4, 5 from R_6_3 and R_6_3_w_pi
+    # theta_3_1 = atan2(R_6_3[1, 2], R_6_3[0, 2])
+    theta_4 = atan2(sqrt(1 - R_6_3[2, 2]**2), R_6_3[2, 2])
+    theta_4_negative = atan2(-sqrt(1 - R_6_3[2, 2]**2), R_6_3[2, 2])
+    theta_4_w_pi = atan2(sqrt(1 - R_6_3_w_pi[2, 2]**2), R_6_3_w_pi[2, 2])
+    theta_4_negative_w_pi = atan2(-sqrt(1 - R_6_3_w_pi[2, 2]**2), R_6_3_w_pi[2, 2])
+    theta_5 = atan2(R_6_3[2, 1], -R_6_3[2, 0])
+    theta_5_w_pi = atan2(R_6_3_w_pi[2, 1], -R_6_3_w_pi[2, 0])
+
+    # arrange results into matrix
+    possible_joint_configs = np.array([
+        [theta0, theta1, theta2, theta_4, theta_5],
+        [theta0_w_pi, theta1, theta2, theta_4_w_pi, theta_5_w_pi],
+        [theta0, theta1, theta2, theta_4_negative, theta_5],
+        [theta0_w_pi, theta1, theta2, theta_4_negative_w_pi, theta_5_w_pi]
+    ])
+    
+    for configs in possible_joint_configs:
+        for i in range(len(configs)):
+            configs[i] = wrap_to_pi(configs[i])
+
+    # return 2 possible joint configurations (2 x 5 np.array)
+    return possible_joint_configs
+
+
+
+
+def pose_ik_elbow_down(pose, orientation, dh_params):
     x,y,z = pose
     theta, phi, psi = orientation
 
@@ -232,72 +412,85 @@ def pose_ik_elbow_up(pose, orientation, dh_params):
     # print('o = ', o)
 
     # Read in joint lengths (l1, l2, ... l6)
-    l1 = 205.73 / 1000 # might have to change this based on the slight offset from joint 1 to 2
-    l2 = 200 / 1000 
+    l1 = 205.73 / 1000 # might have to change this based on the slight offset from joint 1 to 2 
+    l2 = 200.00 / 1000 
     # Define l6 -> distance from wrist to end effector
     l6 = 174.15 / 1000
 
     # Find o_c (slide 19 of IK lecture)
-    print(R[:, 2])
+    # print(R[:, 2])
     o_c = np.add(o, -l6 * R[:, 2].reshape(-1, 1)) # 3rd column
     x_c = o_c[0] 
     # print('o_c = ', o_c)
     y_c = o_c[1] 
     z_c = o_c[2]
-
+    # z_c = z_c - 103.91/1000
     ## Use 2D planar IK solution to find other joints
 
     # Find theta 0 (slide 20)
-    theta1_1 =  atan2(y_c, x_c)
-    theta1_2 = pi + atan2(y_c, x_c)
+    theta0 = atan2(y_c, x_c) - pi/2
+    theta0_w_pi = pi + theta0
 
-    # Find 2 solutions for theta 3 (slide 9) --> is theta 2 in slides
-    theta3_1 = acos(((x_c**2 + y_c**2) - l1**2 - l2**2) / 2*l1*l2)
-    theta3_2 = -theta3_1
+    # Find 2 solutions for theta 2 (slide 9) --> is theta 2 in slides
+    theta2 = -acos(((sqrt(x_c**2 + y_c**2) + z_c**2) - l1**2 - l2**2) / 2*l1*l2)
+    # theta2 is elbow down, we get POSITIVE theta2_calculated (we are in elbow down)
+    # theta2 = atan2(200,50) +- theta2 # theta2 would be greater than atan2(4)
+    
+    # Find theta 1 based on theta 2 (slide 9) --> is theta 1 in slides
+    theta1 = atan2(z_c, sqrt(x_c**2 + y_c**2)) - atan2(l2*sin(theta2), l1+l2*cos(theta2))
+    
+    theta2 = pi/2 - theta2     
+    theta1 = pi/2 - theta1  # handle offset
 
-    # theta2_1 is elbow up
-    # theta2_2 is elbow down
-
-    # Find theta 2 based on theta 2 (slide 9) --> is theta 1 in slides
-    theta2_1 = atan2(y_c, x_c) - atan2(l2*sin(theta3_1), l1+l2*cos(theta3_1))
-    theta2_2 = atan2(y_c, x_c) - atan2(l2*sin(theta3_2), l1+l2*cos(theta3_2))
-
-    # Now that we have theta 1, 2, and 3, we can find orientation of the wrist R_3^0 using forward kinematics (slide 24)
+    # Now that we have theta 0, 1, and 2, we can find orientation of the wrist R_3^0 using forward kinematics (slide 24)
 
     # Let's do for elbow up first
-    c1 = cos(theta1_1)
-    c23 = cos(theta2_1 + theta3_1)
-    s23 = sin(theta2_1 + theta3_1)
-    s1 = sin(theta1_1)
+    c1 = cos(theta0)
+    c1_w_pi = cos(theta0_w_pi)
+    c23 = cos(theta1 + theta2)
+    s23 = sin(theta1 + theta2)
+    s1 = sin(theta0)
+    s1_w_pi = sin(theta0_w_pi)
     # Calculate R_3^0 (slide 24)
     R_3_0 = np.array([
         [c1*c23, -c1*s23, s1],
         [s1*c23, -s1*s23, -c1],
         [s23, c23, 0]
     ])
+    # Calculate with pi offset
+    R_3_0_w_pi = np.array([
+        [c1_w_pi*c23, -c1_w_pi*s23, s1_w_pi],
+        [s1_w_pi*c23, -s1_w_pi*s23, -c1_w_pi],
+        [s23, c23, 0]
+    ])
     # Calculate R_6^3
     R_6_3 = np.matmul(np.transpose(R_3_0), R)
+    R_6_3_w_pi = np.matmul(np.transpose(R_3_0_w_pi), R)
 
-    # Get theta 4, 5, and 6 from R_6_3
-    theta_4_1 = atan2(R_6_3[1, 2], R_6_3[0, 2])
-    theta_5_1 = atan2(sqrt(1 - R_6_3[2, 2]**2), R_6_3[2, 2])
-    theta_5_2 = atan2(-sqrt(1 - R_6_3[2, 2]**2), R_6_3[2, 2])
-    theta_6_1 = atan2(R_6_3[2, 1], -R_6_3[2, 0])
+    # Get theta 4, 5 from R_6_3 and R_6_3_w_pi
+    # theta_3_1 = atan2(R_6_3[1, 2], R_6_3[0, 2])
+    theta_4 = atan2(sqrt(1 - R_6_3[2, 2]**2), R_6_3[2, 2])
+    theta_4_negative = atan2(-sqrt(1 - R_6_3[2, 2]**2), R_6_3[2, 2])
+    theta_4_w_pi = atan2(sqrt(1 - R_6_3_w_pi[2, 2]**2), R_6_3_w_pi[2, 2])
+    theta_4_negative_w_pi = atan2(-sqrt(1 - R_6_3_w_pi[2, 2]**2), R_6_3_w_pi[2, 2])
+    theta_5 = atan2(R_6_3[2, 1], -R_6_3[2, 0])
+    theta_5_w_pi = atan2(R_6_3_w_pi[2, 1], -R_6_3_w_pi[2, 0])
 
     # arrange results into matrix
     possible_joint_configs = np.array([
-        [theta1_1, theta2_1, theta3_1, theta_4_1, theta_5_1, theta_6_1],
-        [theta1_2, theta2_2, theta3_2, theta_4_1, theta_5_2, theta_6_1]
+        [theta0, theta1, theta2, theta_4, theta_5],
+        [theta0_w_pi, theta1, theta2, theta_4_w_pi, theta_5_w_pi],
+        [theta0, theta1, theta2, theta_4_negative, theta_5],
+        [theta0_w_pi, theta1, theta2, theta_4_negative_w_pi, theta_5_w_pi]
     ])
     
+    for configs in possible_joint_configs:
+        for i in range(len(configs)):
+            # print("theta ", theta)
+            configs[i] = wrap_to_pi(configs[i])
+            # print("after wrap_to_pi ", theta)
+
     # return 2 possible joint configurations (2 x 5 np.array)
-    return possible_joint_configs
-
-def pose_ik_elbow_down(pose, orientation, dh_params):
-
-
-    # return 2 possible joint configurations
-    possible_joint_configs = np.zeros([2, 6])
     return possible_joint_configs
 
 def IK_geometric(dh_params, pose):

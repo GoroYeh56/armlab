@@ -14,7 +14,7 @@ You will upgrade some functions and also implement others according to the comme
 from sys import path_importer_cache
 import numpy as np
 from functools import partial
-from kinematics import FK_dh, FK_pox, get_pose_from_T, get_euler_angles_from_T
+from kinematics import FK_dh, FK_pox, get_pose_from_T, get_euler_angles_from_T, IK_geometric
 import time
 import csv
 from builtins import super
@@ -283,18 +283,23 @@ class RXArm(InterbotixRobot):
         z = Translation[2]
         # print("x, y, z", x, y, z)
 
-        # while True:
-        #     pass
-
-        euler_angles = get_euler_angles_from_T(Hwe)
-        phi = euler_angles[0]
-        theta = euler_angles[1]
-        psi = euler_angles[2]
+        # euler_angles = get_euler_angles_from_T(Hwe)
+        # phi = euler_angles[0]
+        # theta = euler_angles[1]
+        # psi = euler_angles[2]
         
-        # He0 = np.linalg.inv( H01 @ H12 @ H23 @ H34 @ H4e)
-        # convert He0 to quaternion?
-        # Then ZYZ Euler Angle Representation
-        return [x, y, z, phi, theta, psi]
+        joint_positions = self.get_positions()
+        phi = joint_positions[0] + np.pi/2
+        theta = joint_positions[4]
+        psi = joint_positions[1] - joint_positions[2] - joint_positions[3]
+
+        pose = [x, y, z, phi, theta, psi]
+
+        # Pass FK pose into IK_geometry
+        joint_calculated = IK_geometric(self.dh_params, pose)
+        print("joint from IK: ", joint_calculated)
+
+        return pose
         # return [0, 0, 0, 0]
 
     @_ensure_initialized

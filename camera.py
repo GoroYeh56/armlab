@@ -147,7 +147,7 @@ class Camera():
         pass
 
     
-    def transform_pixel_to_world(self, point):
+    def transform_pixel_to_world(self, x, y):
         """
         @brief Transform point from pixel frame to world frame
 
@@ -155,12 +155,12 @@ class Camera():
 
         @return a point in the world frame
         """
-        point_3by1 = np.vstack((point.x() , point.y() , 1))
+        point_3by1 = np.vstack((x, y , 1))
 
         A_inv = np.linalg.inv(self.intrinsic_matrix)
         pt_in_cam = np.matmul(A_inv , point_3by1)
         pt_in_world = np.matmul(np.linalg.inv(self.extrinsic_matrix) , pt_in_cam)
-        np.delete(pt_in_world , 2)
+        pt_in_world =  np.delete(pt_in_world , 2)
         return pt_in_world
 
 

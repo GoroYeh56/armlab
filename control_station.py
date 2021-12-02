@@ -105,6 +105,8 @@ class Gui(QMainWindow):
         self.ui.btnUser7.clicked.connect(partial(lambda: self.sm.record_open()))
         self.ui.btnUser8.setText('Record Closed')
         self.ui.btnUser8.clicked.connect(partial(lambda: self.sm.record_closed()))
+        self.ui.btnUser8.setText('Pick and Place')
+        self.ui.btnUser8.clicked.connect(partial(nxt_if_arm_init, 'pick_place'))
 
 
         # Sliders
@@ -173,6 +175,7 @@ class Gui(QMainWindow):
     """ Other callback functions attached to GUI elements"""
 
     def estop(self):
+
         self.rxarm.disable_torque()
         self.sm.set_next_state('estop')
 
@@ -232,7 +235,7 @@ class Gui(QMainWindow):
             z = self.camera.DepthFrameRaw[pt.y()][pt.x()]
             self.ui.rdoutMousePixels.setText("(%.0f,%.0f,%.0f)" %
                                              (pt.x(), pt.y(), z))
-            pt_in_world = self.camera.transform_pixel_to_world(pt)
+            pt_in_world = self.camera.transform_pixel_to_world(pt.x(), pt.y())
             self.ui.rdoutMouseWorld.setText("(%.2f,%.2f,%.2f)" %
                                             (pt_in_world[0] * 1000.0, pt_in_world[1] * 1000.0, (972.0 - z)))
 

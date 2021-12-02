@@ -2,6 +2,7 @@
 The state machine that implements the logic.
 """
 from PyQt4.QtCore import (QThread, Qt, pyqtSignal, pyqtSlot, QTimer)
+from kinematics import FK_dh, FK_pox, get_pose_from_T, get_euler_angles_from_T, IK_geometric
 import time
 import numpy as np
 import rospy
@@ -71,6 +72,9 @@ class StateMachine():
 
         if self.next_state == "teach":
             self.teach()
+        
+        if self.next_state == "pick_place":
+            self.pick_place()
 
 
 
@@ -97,6 +101,8 @@ class StateMachine():
         self.status_message = "EMERGENCY STOP - Check rxarm and restart program"
         self.current_state = "estop"
         self.rxarm.disable_torque()
+        self.waypoints = []
+        self.replay_buffer = []
 
     def teach(self):
         self.status_message = "Enter Teach state..."
@@ -123,6 +129,40 @@ class StateMachine():
         self.waypoints.append(self.rxarm.get_positions())
         self.replay_buffer.append(-1)
         print('close gripper...')
+
+    ### @brief Enters Pick and Place state
+    def pick_place(self):
+        self.current_state = "pick_place"
+        self.next_state = "execute"
+        self.waypoints = []
+
+        i = 0
+        
+        # collect and execute two waypoints
+        while i < 2:
+            # every time we get a new click, find joint angles and add to list of waypoints
+            if self.camera.new_click == True:
+                click = self.camera.last_click
+                pt = click
+                z = self.camera.DepthFrameRaw[pt[1]][pt[0]]
+                pt_in_world = self.camera.transform_pixel_to_world(pt[0], pt[1])
+                pt_in_world = np.append(pt_in_world , (972.0 - z)/1000  )
+                pt_in_world = pt_in_world # convert to meters
+                # in radians
+                phi =  0
+                theta = 0 
+                psi = np.pi/4
+                pose = np.append(pt_in_world, np.array([phi, theta, psi]))
+                print("Sending pose for IK: ", pose)
+                print("Before adding wp: self.waypoints: ", self.waypoints)
+                joint_positions = IK_geometric(self.rxarm.dh_params, pose)
+                self.waypoints.append(joint_positions[1][0]) # Takes elbow_down sol
+                self.replay_buffer.append(0)
+                print("add joint waypoint: (rad)", joint_positions[1][0])
+                i = i + 1
+                self.camera.new_click = False
+        
+            
 
     def execute(self):
         """!
@@ -152,7 +192,7 @@ class StateMachine():
         # send kinematics
         print('executing...')
         max_errors = {}
-
+        # print("Robot waypoints: ", waypoints)
 
         # TODO : 11/16 Tue : add a 'FLAG' to specify whether we are now closing: 
         # 1: we are currently CLOSED. when we reach: we want to open
@@ -187,12 +227,12 @@ class StateMachine():
                 diff = abs(self.rxarm.get_joint_positions()[i] - wp[i])
                 total_errors.append(diff)
             max_errors[self.rxarm.joint_names[np.argmax(total_errors)]] = max(total_errors)
-            print('errors: ', total_errors)
+            # print('errors: ', total_errors)
 
             # increment index
             index += 1
 
-        print("max errors in each waypoint: ", max_errors)
+        # print("max errors in each waypoint: ", max_errors)
         self.status_message = "State: Execute - Executing motion plan"
         self.next_state = "idle"
         self.waypoints = []
@@ -232,9 +272,9 @@ class StateMachine():
         pt_image_T = np.matmul(self.camera.intrinsic_matrix , pt_camera.T)
 
 
-        print("pt_world: " , pt_world)
-        print("pt_camera: " , pt_camera)
-        print("pt_image: ", pt_image_T.T)
+        # print("pt_world: " , pt_world)
+        # print("pt_camera: " , pt_camera)
+        # print("pt_image: ", pt_image_T.T)
 
         # delete last column of image frame points, format inputs for solvePnP
         pt_image = pt_image_T.T
@@ -251,15 +291,15 @@ class StateMachine():
         # convert rotation vector to homogeneous rotation matrix (3 by 3)
         Rot_3by3 , jacob = cv2.Rodrigues(Rot)
 
-        print("Rot: ", Rot)
-        print("Rot_3by3: ", Rot_3by3)
-        print("trans: ", trans)
+        # print("Rot: ", Rot)
+        # print("Rot_3by3: ", Rot_3by3)
+        # print("trans: ", trans)
 
         # assemble extrinsic matrix
         bot_row = np.array([0 , 0 , 0 , 1])
         self.camera.extrinsic_matrix = np.vstack((np.hstack((Rot_3by3 , trans)) , bot_row))
 
-        print("EXTRINSIC: " , self.camera.extrinsic_matrix)
+        # print("EXTRINSIC: " , self.camera.extrinsic_matrix)
         
         # Add 1 to each pt in world_apriltag_coords   
         ones = np.array([1, 1, 1, 1]).T.reshape(-1,1)
@@ -267,14 +307,14 @@ class StateMachine():
 
         # verify accuracy of extrinsic matrix
         pt_camera_verified = np.matmul(self.camera.extrinsic_matrix, pt_world.T)
-        print("Ours pt_camera: ", pt_camera_verified.T) # row by row
-        print("pt_camera from aprilTag: ", pt_camera)
+        # print("Ours pt_camera: ", pt_camera_verified.T) # row by row
+        # print("pt_camera from aprilTag: ", pt_camera)
         
         
         rot_part = self.camera.extrinsic_matrix[0:2, 0:2]
         trans_part = self.camera.extrinsic_matrix[0:2, 3]
-        print("rot_part: ", rot_part)
-        print("trans_part: ", trans_part)
+        # print("rot_part: ", rot_part)
+        # print("trans_part: ", trans_part)
         self.camera.extrinsic_matrix = np.vstack( ( np.hstack((rot_part, trans_part.T.reshape(2,1))) , np.array([0, 0, 1]).reshape(1,3) ) )
         # self.camera.extrinsic_matrix[:,0] = -self.camera.extrinsic_matrix[:,0]
         print("extrinsic matrix 3x3: ", self.camera.extrinsic_matrix)

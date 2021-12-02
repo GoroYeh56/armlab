@@ -283,6 +283,9 @@ class RXArm(InterbotixRobot):
         z = Translation[2]
         # print("x, y, z", x, y, z)
 
+
+        H2e = np.matmul( np.matmul(H23,H34), H4e)
+        # euler_angles = get_euler_angles_from_T(Hwe)
         # euler_angles = get_euler_angles_from_T(Hwe)
         # phi = euler_angles[0]
         # theta = euler_angles[1]
@@ -296,8 +299,11 @@ class RXArm(InterbotixRobot):
         pose = [x, y, z, phi, theta, psi]
 
         # Pass FK pose into IK_geometry
-        joint_calculated = IK_geometric(self.dh_params, pose)
-        print("joint from IK: ", joint_calculated)
+        # joint_calculated = IK_geometric(self.dh_params, pose)
+        # for i in range(len(joint_calculated)):
+        #     joint_calculated[i] *= R2D
+
+        # print("joint from IK: ", joint_calculated)
 
         return pose
         # return [0, 0, 0, 0]

@@ -6,7 +6,7 @@ There are some functions to start with, you may need to implement a few more
 """
 
 import numpy as np
-from math import atan2, pi, acos, sqrt, cos, sin, degrees, radians
+from math import atan2, pi, acos, sqrt, cos, sin, degrees, radians, atan
 # expm is a matrix exponential function
 from scipy.linalg import expm
 from scipy.spatial.transform import Rotation as R
@@ -325,16 +325,24 @@ def pose_ik_elbow_up(pose, orientation, dh_params):
     # y_c = o_c[1].item(0)
     # z_c = o_c[2].item(0)
 
-    x_c = x - l6*cos(phi)
-    y_c = y - l6*sin(phi)
-    z_c = z + l6*sin(psi)
+    # calculate angle base
+    angle_base = atan2(-x, y)
+
+    pitch = psi
+
+    # x_c = x - l6*cos(phi)
+    x_c = x + l6*sin(angle_base)*cos(pitch)
+    # y_c = y - l6*sin(phi)
+    y_c = y - l6*cos(angle_base)*cos(pitch)
+    # z_c = z + l6*sin(psi) # psi is pitch
+    z_c = z + l6*sin(pitch)
     z_c = z_c - (103.91/1000)
 
-    # print("psi: ",psi)
-    # print("sin(psi) ", sin(psi))
-    # print('xc = ', x_c)
-    # print('yc = ', y_c)
-    # print('zc = ', z_c)        
+    print("psi: ",psi)
+    print("sin(psi) ", sin(psi))
+    print('xc = ', x_c)
+    print('yc = ', y_c)
+    print('zc = ', z_c)        
 
     pitch = psi
     theta = 0
@@ -377,37 +385,37 @@ def pose_ik_elbow_up(pose, orientation, dh_params):
 
     # Now that we have theta 0, 1, and 2, we can find orientation of the wrist R_3^0 using forward kinematics (slide 24)
 
-    # Let's do for elbow up first
-    c1 = cos(theta0)
-    c1_w_pi = cos(theta0_w_pi)
-    c23 = cos(theta1 + theta2)
-    s23 = sin(theta1 + theta2)
-    s1 = sin(theta0)
-    s1_w_pi = sin(theta0_w_pi)
-    # Calculate R_3^0 (slide 24)
-    R_3_0 = np.array([
-        [c1*c23, -c1*s23, s1],
-        [s1*c23, -s1*s23, -c1],
-        [s23, c23, 0]
-    ])
-    # Calculate with pi offset
-    R_3_0_w_pi = np.array([
-        [c1_w_pi*c23, -c1_w_pi*s23, s1_w_pi],
-        [s1_w_pi*c23, -s1_w_pi*s23, -c1_w_pi],
-        [s23, c23, 0]
-    ])
-    # Calculate R_6^3
-    R_6_3 = np.matmul(np.transpose(R_3_0), R)
-    R_6_3_w_pi = np.matmul(np.transpose(R_3_0_w_pi), R)
+    # # Let's do for elbow up first
+    # c1 = cos(theta0)
+    # c1_w_pi = cos(theta0_w_pi)
+    # c23 = cos(theta1 + theta2)
+    # s23 = sin(theta1 + theta2)
+    # s1 = sin(theta0)
+    # s1_w_pi = sin(theta0_w_pi)
+    # # Calculate R_3^0 (slide 24)
+    # R_3_0 = np.array([
+    #     [c1*c23, -c1*s23, s1],
+    #     [s1*c23, -s1*s23, -c1],
+    #     [s23, c23, 0]
+    # ])
+    # # Calculate with pi offset
+    # R_3_0_w_pi = np.array([
+    #     [c1_w_pi*c23, -c1_w_pi*s23, s1_w_pi],
+    #     [s1_w_pi*c23, -s1_w_pi*s23, -c1_w_pi],
+    #     [s23, c23, 0]
+    # ])
+    # # Calculate R_6^3
+    # R_6_3 = np.matmul(np.transpose(R_3_0), R)
+    # R_6_3_w_pi = np.matmul(np.transpose(R_3_0_w_pi), R)
 
-    # Get theta 4, 5 from R_6_3 and R_6_3_w_pi
-    # theta_3_1 = atan2(R_6_3[1, 2], R_6_3[0, 2])
-    theta_4 = atan2(sqrt(1 - R_6_3[2, 2]**2), R_6_3[2, 2])
-    theta_4_negative = atan2(-sqrt(1 - R_6_3[2, 2]**2), R_6_3[2, 2])
-    theta_4_w_pi = atan2(sqrt(1 - R_6_3_w_pi[2, 2]**2), R_6_3_w_pi[2, 2])
-    theta_4_negative_w_pi = atan2(-sqrt(1 - R_6_3_w_pi[2, 2]**2), R_6_3_w_pi[2, 2])
-    theta_5 = atan2(R_6_3[2, 1], -R_6_3[2, 0])
-    theta_5_w_pi = atan2(R_6_3_w_pi[2, 1], -R_6_3_w_pi[2, 0])
+    # # Get theta 4, 5 from R_6_3 and R_6_3_w_pi
+    # # theta_3_1 = atan2(R_6_3[1, 2], R_6_3[0, 2])
+    # theta_4 = atan2(sqrt(1 - R_6_3[2, 2]**2), R_6_3[2, 2])
+    # theta_4_negative = atan2(-sqrt(1 - R_6_3[2, 2]**2), R_6_3[2, 2])
+    # theta_4_w_pi = atan2(sqrt(1 - R_6_3_w_pi[2, 2]**2), R_6_3_w_pi[2, 2])
+    # theta_4_negative_w_pi = atan2(-sqrt(1 - R_6_3_w_pi[2, 2]**2), R_6_3_w_pi[2, 2])
+    # theta_5 = atan2(R_6_3[2, 1], -R_6_3[2, 0])
+    # theta_5_w_pi = atan2(R_6_3_w_pi[2, 1], -R_6_3_w_pi[2, 0])
 
     ## Easy way to find theta4 & theta5
     theta_4 = theta1 - theta2 - pitch
@@ -458,12 +466,25 @@ def pose_ik_elbow_down(pose, orientation, dh_params):
 
     # Find o_c (slide 19 of IK lecture)
     # print(R[:, 2])
-    o_c = np.add(o, -l6 * R[:, 2].reshape(-1, 1)) # 3rd column
+    # o_c = np.add(o, -l6 * R[:, 2].reshape(-1, 1)) # 3rd column
 
-    x_c = x - l6*cos(phi)
-    y_c = y - l6*sin(phi)
-    z_c = z + l6*sin(psi)
+    # calculate angle base
+    angle_base = atan2(-x, y)
+
+    pitch = psi
+
+    # x_c = x - l6*cos(phi)
+    x_c = x + l6*sin(angle_base)*cos(pitch)
+    # y_c = y - l6*sin(phi)
+    y_c = y - l6*cos(angle_base)*cos(pitch)
+    # z_c = z + l6*sin(psi) # psi is pitch
+    z_c = z + l6*sin(pitch)
     z_c = z_c - (103.91/1000)
+
+    # x_c = x - l6*cos(phi)
+    # y_c = y - l6*sin(phi)
+    # z_c = z + l6*sin(psi) # good one
+    # z_c = z_c - (103.91/1000)
 
     ## Use 2D planar IK solution to find other joints
     pitch = psi
@@ -492,37 +513,37 @@ def pose_ik_elbow_down(pose, orientation, dh_params):
 
     # Now that we have theta 0, 1, and 2, we can find orientation of the wrist R_3^0 using forward kinematics (slide 24)
 
-    # Let's do for elbow up first
-    c1 = cos(theta0)
-    c1_w_pi = cos(theta0_w_pi)
-    c23 = cos(theta1 + theta2)
-    s23 = sin(theta1 + theta2)
-    s1 = sin(theta0)
-    s1_w_pi = sin(theta0_w_pi)
-    # Calculate R_3^0 (slide 24)
-    R_3_0 = np.array([
-        [c1*c23, -c1*s23, s1],
-        [s1*c23, -s1*s23, -c1],
-        [s23, c23, 0]
-    ])
-    # Calculate with pi offset
-    R_3_0_w_pi = np.array([
-        [c1_w_pi*c23, -c1_w_pi*s23, s1_w_pi],
-        [s1_w_pi*c23, -s1_w_pi*s23, -c1_w_pi],
-        [s23, c23, 0]
-    ])
-    # Calculate R_6^3
-    R_6_3 = np.matmul(np.transpose(R_3_0), R)
-    R_6_3_w_pi = np.matmul(np.transpose(R_3_0_w_pi), R)
+    # # Let's do for elbow up first
+    # c1 = cos(theta0)
+    # c1_w_pi = cos(theta0_w_pi)
+    # c23 = cos(theta1 + theta2)
+    # s23 = sin(theta1 + theta2)
+    # s1 = sin(theta0)
+    # s1_w_pi = sin(theta0_w_pi)
+    # # Calculate R_3^0 (slide 24)
+    # R_3_0 = np.array([
+    #     [c1*c23, -c1*s23, s1],
+    #     [s1*c23, -s1*s23, -c1],
+    #     [s23, c23, 0]
+    # ])
+    # # Calculate with pi offset
+    # R_3_0_w_pi = np.array([
+    #     [c1_w_pi*c23, -c1_w_pi*s23, s1_w_pi],
+    #     [s1_w_pi*c23, -s1_w_pi*s23, -c1_w_pi],
+    #     [s23, c23, 0]
+    # ])
+    # # Calculate R_6^3
+    # R_6_3 = np.matmul(np.transpose(R_3_0), R)
+    # R_6_3_w_pi = np.matmul(np.transpose(R_3_0_w_pi), R)
 
-    # Get theta 4, 5 from R_6_3 and R_6_3_w_pi
-    # theta_3_1 = atan2(R_6_3[1, 2], R_6_3[0, 2])
-    theta_4 = atan2(sqrt(1 - R_6_3[2, 2]**2), R_6_3[2, 2])
-    theta_4_negative = atan2(-sqrt(1 - R_6_3[2, 2]**2), R_6_3[2, 2])
-    theta_4_w_pi = atan2(sqrt(1 - R_6_3_w_pi[2, 2]**2), R_6_3_w_pi[2, 2])
-    theta_4_negative_w_pi = atan2(-sqrt(1 - R_6_3_w_pi[2, 2]**2), R_6_3_w_pi[2, 2])
-    theta_5 = atan2(R_6_3[2, 1], -R_6_3[2, 0])
-    theta_5_w_pi = atan2(R_6_3_w_pi[2, 1], -R_6_3_w_pi[2, 0])
+    # # Get theta 4, 5 from R_6_3 and R_6_3_w_pi
+    # # theta_3_1 = atan2(R_6_3[1, 2], R_6_3[0, 2])
+    # theta_4 = atan2(sqrt(1 - R_6_3[2, 2]**2), R_6_3[2, 2])
+    # theta_4_negative = atan2(-sqrt(1 - R_6_3[2, 2]**2), R_6_3[2, 2])
+    # theta_4_w_pi = atan2(sqrt(1 - R_6_3_w_pi[2, 2]**2), R_6_3_w_pi[2, 2])
+    # theta_4_negative_w_pi = atan2(-sqrt(1 - R_6_3_w_pi[2, 2]**2), R_6_3_w_pi[2, 2])
+    # theta_5 = atan2(R_6_3[2, 1], -R_6_3[2, 0])
+    # theta_5_w_pi = atan2(R_6_3_w_pi[2, 1], -R_6_3_w_pi[2, 0])
 
 
     ## Easy way to find theta4 & theta5

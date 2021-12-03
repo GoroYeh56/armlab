@@ -547,7 +547,8 @@ def pose_ik_elbow_down(pose, orientation, dh_params):
 
 
     ## Easy way to find theta4 & theta5
-    theta_4 = theta1 - theta2 - pitch
+    # theta_4 = theta1 - theta2 - pitch
+    theta_4 = pitch - (theta1 + theta2)
     theta_5 = 0 
     theta_4_negative = -theta_4
 

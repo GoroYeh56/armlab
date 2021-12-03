@@ -8,6 +8,12 @@ import numpy as np
 import rospy
 import cv2
 
+
+
+
+D2R = np.pi / 180.0
+R2D = 180.0 / np.pi
+
 class StateMachine():
     """!
     @brief      This class describes a state machine.
@@ -135,6 +141,7 @@ class StateMachine():
         self.current_state = "pick_place"
         self.next_state = "execute"
         self.waypoints = []
+        self.replay_buffer = []
 
         i = 0
         
@@ -146,19 +153,59 @@ class StateMachine():
                 pt = click
                 z = self.camera.DepthFrameRaw[pt[1]][pt[0]]
                 pt_in_world = self.camera.transform_pixel_to_world(pt[0], pt[1])
+                
+                print("Before: ", pt_in_world)
+                # minus 3cm in both x & y direction
+                # for j in range(len(pt_in_world)):
+                #     if pt_in_world[j] >= 0:
+                #         pt_in_world[j] += (40.00/100)
+                #     else:
+                #         pt_in_world[j] -= (40.00/100)
+                z = z + 15/100 # add 5cm to z
+                
+                print("After minus 5cm: ", pt_in_world)
+
                 pt_in_world = np.append(pt_in_world , (972.0 - z)/1000  )
                 pt_in_world = pt_in_world # convert to meters
                 # in radians
                 phi =  0
                 theta = 0 
-                psi = np.pi/4
+                psi = 45 * D2R
                 pose = np.append(pt_in_world, np.array([phi, theta, psi]))
-                print("Sending pose for IK: ", pose)
-                print("Before adding wp: self.waypoints: ", self.waypoints)
-                joint_positions = IK_geometric(self.rxarm.dh_params, pose)
+
+
+                # Append a pose just above it
+                first_pose = np.append(np.array([pt_in_world[0], pt_in_world[1], pt_in_world[2]+0.15]) , np.array([phi, theta, psi]))
+                joint_positions = IK_geometric(self.rxarm.dh_params, first_pose)
+                print("add first waypoint: (rad)", joint_positions[1][0])
                 self.waypoints.append(joint_positions[1][0]) # Takes elbow_down sol
-                self.replay_buffer.append(0)
-                print("add joint waypoint: (rad)", joint_positions[1][0])
+                if i==0:
+                    self.replay_buffer.append(1) # Open gripper
+                else:
+                    self.replay_buffer.append(0) # Current carrying a block, don't open gripper
+                    
+                print("Sending pose for IK: ", pose)
+                # print("Before adding wp: self.waypoints: ", self.waypoints)
+                joint_positions = IK_geometric(self.rxarm.dh_params, pose)
+                
+                if i==0:
+                    joint_positions[1][0][1] = joint_positions[1][0][1] - 3.5*D2R
+                    self.replay_buffer.append(-1) # Close gripper
+                else:
+                    joint_positions[1][0][1] = joint_positions[1][0][1] - 7.5*D2R                        
+                    self.replay_buffer.append(1) # Now reach target, placing: Open gripper
+                # Make elbow joint more positive
+                joint_positions[1][0][2] = joint_positions[1][0][2] + 5*D2R    
+                self.waypoints.append(joint_positions[1][0]) # Takes elbow_down sol
+                print("add TARGET waypoint: (rad)", joint_positions[1][0])
+
+                # Append a pose just above it
+                pose = np.append(np.array([pt_in_world[0], pt_in_world[1], pt_in_world[2]+0.15])  , np.array([phi, theta, psi]))
+                joint_positions = IK_geometric(self.rxarm.dh_params, pose)
+                print("add end waypoint: (rad)", joint_positions[1][0])
+                self.waypoints.append(joint_positions[1][0]) # Takes elbow_down sol
+                self.replay_buffer.append(0) # Don't change gripper state
+
                 i = i + 1
                 self.camera.new_click = False
         
@@ -214,7 +261,7 @@ class StateMachine():
             elif self.replay_buffer[index] == 1: # open
                 self.rxarm.open_gripper()
                 rospy.sleep(1)
-            else: # close gripper
+            else: # close gripper -1
                 self.rxarm.close_gripper()
                 rospy.sleep(1)
 

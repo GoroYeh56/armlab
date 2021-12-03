@@ -11,6 +11,8 @@ from math import atan2, pi, acos, sqrt, cos, sin, degrees, radians, atan
 from scipy.linalg import expm
 from scipy.spatial.transform import Rotation as R
 
+
+
 def clamp(angle):
     """!
     @brief      Clamp angles between (-pi, pi]
@@ -329,7 +331,8 @@ def pose_ik_elbow_up(pose, orientation, dh_params):
     angle_base = atan2(-x, y)
 
     pitch = psi
-
+    print("angle base: ", degrees(angle_base))
+    print("pitch: ", degrees(pitch))
     # x_c = x - l6*cos(phi)
     x_c = x + l6*sin(angle_base)*cos(pitch)
     # y_c = y - l6*sin(phi)
@@ -338,11 +341,7 @@ def pose_ik_elbow_up(pose, orientation, dh_params):
     z_c = z + l6*sin(pitch)
     z_c = z_c - (103.91/1000)
 
-    print("psi: ",psi)
-    print("sin(psi) ", sin(psi))
-    print('xc = ', x_c)
-    print('yc = ', y_c)
-    print('zc = ', z_c)        
+    print("oc: ", x_c, y_c, z_c)
 
     pitch = psi
     theta = 0
@@ -354,14 +353,6 @@ def pose_ik_elbow_up(pose, orientation, dh_params):
     theta0 = atan2(y_c, x_c) - pi/2
     theta0_w_pi = pi + theta0
 
-    # print("x_c type: ",type(x_c))
-    # print("x_c: ", x_c)
-    # print("x_c shape: ", x_c.shape)
-    # print("sqrt: ",sqrt(x_c**2 + y_c**2) )
-    # print(" l1**2 - l2**2 ", l1**2 - l2**2)
-    # print("l1 ", l1)
-    # print("l2 ", l2)
-    # print("type: ", type(l1), type(l2))
     
     # print(" 2*l1*l2 ", 2*l1*l2)
     # print("numerator: ",((sqrt(x_c**2 + y_c**2) + z_c**2) - l1**2 - l2**2))
@@ -369,19 +360,10 @@ def pose_ik_elbow_up(pose, orientation, dh_params):
     # Find 2 solutions for theta 2 (slide 9) --> is theta 2 in slides
     theta2 = acos( ((sqrt(x_c**2 + y_c**2) + z_c**2) - l1**2 - l2**2) / 2*l1*l2)
     # theta2 is elbow up, we get NEGATIVE theta2_calculated (we are in elbow up)
-    # theta2 = atan2(200,50) - theta2 # theta2 would be smaller than atan2(4) 
-    theta2 = pi/2 - theta2
-    # Find theta 1 based on theta 2 (slide 9) --> is theta 1 in slides
-    # print("z_c, x_c, y_c ", z_c, x_c, y_c)
-    # print("term1 ",atan2(z_c, sqrt(x_c**2 + y_c**2)))
-    # print("theta2 ", theta2)
-    # print("l2*sin2 l1+l2*cos2 ", l2*sin(theta2), l1+l2*cos(theta2))
-    # print("term2 ",atan2(l2*sin(theta2), l1+l2*cos(theta2))  )
-
     theta1 = atan2(z_c, sqrt(x_c**2 + y_c**2)) - atan2(l2*sin(theta2), l1+l2*cos(theta2)) 
 
-    ##### Problem Here ! #####
-    theta1 = atan2(200,50) + theta1 # handle offset
+    theta2 = atan2(200,50) + theta2    
+    theta1 = atan2(200,50) - theta1 # handle offset
 
     # Now that we have theta 0, 1, and 2, we can find orientation of the wrist R_3^0 using forward kinematics (slide 24)
 
@@ -507,10 +489,14 @@ def pose_ik_elbow_down(pose, orientation, dh_params):
     
     # Find theta 1 based on theta 2 (slide 9) --> is theta 1 in slides
     theta1 = atan2(z_c, sqrt(x_c**2 + y_c**2)) - atan2(l2*sin(theta2), l1+l2*cos(theta2))
-    
-    theta2 = pi/2 - theta2     
-    theta1 = pi/2 - theta1  # handle offset
 
+    ### 12/3 by Spencer    
+    # theta2 = pi/2 - theta2     7
+    # theta1 = pi/2 - theta1  # handle offset
+
+    ### 12/4 Tested by Goro
+    theta2 = atan2(200,50) + theta2    
+    theta1 = atan2(200,50) - theta1 # handle offset
     # Now that we have theta 0, 1, and 2, we can find orientation of the wrist R_3^0 using forward kinematics (slide 24)
 
     # # Let's do for elbow up first
@@ -547,8 +533,9 @@ def pose_ik_elbow_down(pose, orientation, dh_params):
 
 
     ## Easy way to find theta4 & theta5
-    # theta_4 = theta1 - theta2 - pitch
-    theta_4 = pitch - (theta1 + theta2)
+    # Wrist Angle = Shoulder - Elbow - Pitch
+    theta_4 = theta1 - theta2 - pitch
+    # theta_4 = pitch - (theta1 + theta2)
     theta_5 = 0 
     theta_4_negative = -theta_4
 

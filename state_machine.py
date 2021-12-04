@@ -7,7 +7,7 @@ import time
 import numpy as np
 import rospy
 import cv2
-
+from math import sqrt
 
 
 
@@ -136,6 +136,24 @@ class StateMachine():
         self.replay_buffer.append(-1)
         print('close gripper...')
 
+    def get_elbow_orientation(self, target_pose):
+
+        dx, dy, dz = target_pose
+        euc_dist = sqrt( dx**2 + dy**2 + dz**2 )
+        if euc_dist > 36.00/100: # 36 cm
+            return 1 # Should do elbow_down
+        else:
+            return 0 # Should do elbow_up
+
+    def get_pitch_based_on_target_distance(self, target_pose):
+        dx, dy, dz = target_pose
+        euc_dist = sqrt( dx**2 + dy**2 + dz**2 )
+        if euc_dist < 45.00/100: # 24 cm
+            return 90*D2R  # Constant 90 deg Pitch
+        else:
+            return 45*D2R # Constant 0 deg Pitch
+
+
     ### @brief Enters Pick and Place state
     def pick_place(self):
         self.current_state = "pick_place"
@@ -149,63 +167,55 @@ class StateMachine():
         while i < 2:
             # every time we get a new click, find joint angles and add to list of waypoints
             if self.camera.new_click == True:
-                click = self.camera.last_click
-                pt = click
+                # get last click coordinates and transform it to world coordinates
+                pt = self.camera.last_click
                 z = self.camera.DepthFrameRaw[pt[1]][pt[0]]
                 pt_in_world = self.camera.transform_pixel_to_world(pt[0], pt[1])
-                
-                print("Before: ", pt_in_world)
-                # minus 3cm in both x & y direction
-                # for j in range(len(pt_in_world)):
-                #     if pt_in_world[j] >= 0:
-                #         pt_in_world[j] += (40.00/100)
-                #     else:
-                #         pt_in_world[j] -= (40.00/100)
-                z = z + 15/100 # add 5cm to z
-                
-                print("After minus 5cm: ", pt_in_world)
-
                 pt_in_world = np.append(pt_in_world , (972.0 - z)/1000  )
-                pt_in_world = pt_in_world # convert to meters
-                # in radians
+                # wrist angles for grasp in radians
                 phi =  0
                 theta = 0 
-                psi = 45 * D2R
+                psi = 60 * D2R # Maintain a constant pitch 60
+                # if < 20cm : set pitch(psi) to 90 deg
+                # else: set pitch to 0 deg
+                psi = self.get_pitch_based_on_target_distance(pt_in_world)
+                
                 pose = np.append(pt_in_world, np.array([phi, theta, psi]))
+                
+                elbow_status = self.get_elbow_orientation(pt_in_world) # 0 is up, 1 is down
 
-
+                print("elbow_status: (0:up, 1: down) ", elbow_status)
                 # Append a pose just above it
-                first_pose = np.append(np.array([pt_in_world[0], pt_in_world[1], pt_in_world[2]+0.15]) , np.array([phi, theta, psi]))
-                joint_positions = IK_geometric(self.rxarm.dh_params, first_pose)
-                print("add first waypoint: (rad)", joint_positions[1][0])
-                self.waypoints.append(joint_positions[1][0]) # Takes elbow_down sol
+                waypoint_offset = 0.2 # 20cm above
+                first_pose = np.append(np.array([pt_in_world[0], pt_in_world[1], pt_in_world[2]+waypoint_offset]), np.array([phi, theta, psi]))
+                
+                print("Inter waypoint: ", first_pose)
+                upper_joint_positions = IK_geometric(self.rxarm.dh_params, first_pose)
+                upper_joint_positions = self.rxarm.find_best_soluton(upper_joint_positions, elbow_status, pose[2]) # pose[2] is the target_z
+                print("add first waypoint: (deg)", upper_joint_positions*R2D)
+                self.waypoints.append(upper_joint_positions) # Takes elbow_down sol
                 if i==0:
                     self.replay_buffer.append(1) # Open gripper
                 else:
                     self.replay_buffer.append(0) # Current carrying a block, don't open gripper
-                    
-                print("Sending pose for IK: ", pose)
-                # print("Before adding wp: self.waypoints: ", self.waypoints)
-                joint_positions = IK_geometric(self.rxarm.dh_params, pose)
                 
-                if i==0:
-                    joint_positions[1][0][1] = joint_positions[1][0][1] - 3.5*D2R
-                    self.replay_buffer.append(-1) # Close gripper
-                else:
-                    joint_positions[1][0][1] = joint_positions[1][0][1] - 7.5*D2R                        
-                    self.replay_buffer.append(1) # Now reach target, placing: Open gripper
-                # Make elbow joint more positive
-                joint_positions[1][0][2] = joint_positions[1][0][2] + 5*D2R    
-                self.waypoints.append(joint_positions[1][0]) # Takes elbow_down sol
-                print("add TARGET waypoint: (rad)", joint_positions[1][0])
-
-                # Append a pose just above it
-                pose = np.append(np.array([pt_in_world[0], pt_in_world[1], pt_in_world[2]+0.15])  , np.array([phi, theta, psi]))
+                # Add Target Point
                 joint_positions = IK_geometric(self.rxarm.dh_params, pose)
-                print("add end waypoint: (rad)", joint_positions[1][0])
-                self.waypoints.append(joint_positions[1][0]) # Takes elbow_down sol
+                joint_positions = self.rxarm.find_best_soluton(joint_positions, elbow_status, pose[2])
+
+                if i==0:
+                    self.replay_buffer.append(-1) # Close gripper
+                else:                         
+                    self.replay_buffer.append(1) # Now reach target, placing: Open gripper
+                self.waypoints.append(joint_positions)
+                print("add TARGET waypoint: (deg)", joint_positions*R2D)
+
+                # Append End pose just above it
+                print("add end waypoint: (deg)", upper_joint_positions*R2D)
+                self.waypoints.append(upper_joint_positions) # Takes elbow_down sol
                 self.replay_buffer.append(0) # Don't change gripper state
 
+                # advance index and get ready for next click
                 i = i + 1
                 self.camera.new_click = False
         

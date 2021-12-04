@@ -14,7 +14,7 @@ You will upgrade some functions and also implement others according to the comme
 from sys import path_importer_cache
 import numpy as np
 from functools import partial
-from kinematics import FK_dh, FK_pox, get_pose_from_T, get_euler_angles_from_T, IK_geometric
+from kinematics import FK_dh, FK_pox, Joint_limits, get_pose_from_T, get_euler_angles_from_T, IK_geometric
 import time
 import csv
 from builtins import super
@@ -26,7 +26,7 @@ from sensor_msgs.msg import JointState
 import rospy
 
 
-from math import cos, sin, radians, degrees
+from math import cos, sin, radians, degrees, fabs
 
 """
 TODO: Implement the missing functions and add anything you need to support them
@@ -89,8 +89,6 @@ class RXArm(InterbotixRobot):
         if (dh_config_file is not None):
             print("df file: ", dh_config_file)
             self.dh_params = RXArm.parse_dh_param_file(self)
-
-
 
 
             
@@ -294,6 +292,8 @@ class RXArm(InterbotixRobot):
         joint_positions = self.get_positions()
         phi = joint_positions[0] + np.pi/2
         theta = joint_positions[4]
+        # Pitch = psi
+        # Psi = Shoulder - Elbow - Wrist Angle
         psi = joint_positions[1] - joint_positions[2] - joint_positions[3]
 
         pose = [x, y, z, phi, theta, psi]
@@ -307,6 +307,35 @@ class RXArm(InterbotixRobot):
 
         return pose
         # return [0, 0, 0, 0]
+
+
+    def find_best_soluton(self, joint_angles, elbow_status, target_z):
+        # print("joint_angles: ", joint_angles)
+
+        solutions = joint_angles[elbow_status][:][:]
+        # print("solutions ", solutions)
+        for solution in solutions:
+            # print("solultion: ", solution)
+            link = 0 # we didn't use it
+            T = FK_dh(self.dh_params, solution, link)
+            ee_pos = get_pose_from_T(T)
+            # if z > 1cm and |x| > 45 cm
+            x, y, z, phi, theta, psi = ee_pos
+            print("x, z: ", x, z)
+            if z > 0.00/100 and x<= 45.00/100 and x >= -45.00/100 and solution[3]<=radians(0):
+                return solution
+                # if elbow_status==0: # elbow up, discard theta3>0 solution
+                #     if solution[3] <= 0:
+                #         return solution
+                # else:
+                #     if solution[3] >= 0:
+                #         return solution
+        # if NO sol'z > 1cm: 
+        print("No valid solution")
+        return np.array([0, 0, 0, 0, 0])
+
+
+
 
     @_ensure_initialized
     def get_wrist_pose(self):
@@ -382,6 +411,9 @@ class RXArmThread(QThread):
         self.rxarm.effort_fb = np.asarray(data.effort)[0:5]
         self.updateJointReadout.emit(self.rxarm.position_fb.tolist())
         self.updateEndEffectorReadout.emit(self.rxarm.get_ee_pose())
+        # print out IK solutions for debugging
+        # joints_debug = IK_geometric(self.rxarm.dh_params, self.rxarm.get_ee_pose())
+        # print('IK joints debug = ', joints_debug * R2D)
         #for name in self.rxarm.joint_names:
         #    print("{0} gains: {1}".format(name, self.rxarm.get_motor_pid_params(name)))
         if (__name__ == '__main__'):
@@ -394,6 +426,7 @@ class RXArmThread(QThread):
         while True:
 
             rospy.spin()
+
 
 
 if __name__ == '__main__':

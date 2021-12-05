@@ -31,6 +31,8 @@ class Camera():
         self.DepthFrameHSV = np.zeros((720, 1280, 3)).astype(np.uint8)
         self.DepthFrameRGB = np.array([])
 
+        self.BlockDetectFrame = np.zeros((720, 1280, 3)).astype(np.uint8)
+
         # mouse clicks & calibration variables
         self.cameraCalibrated = False
         self.intrinsic_matrix = np.array([[942.3094 , 0 , 637.3339] , [0 , 945.0566 , 357.1129] , [0 , 0 , 1]])
@@ -122,6 +124,21 @@ class Camera():
         except:
             return None
 
+    def convertQtBlockFrame(self):
+        """!
+        @brief      Converts tag image frame to format suitable for Qt
+
+        @return     QImage
+        """
+
+        try:
+            frame = cv2.resize(self.BlockDetectFrame, (1280, 720))
+            img = QImage(frame, frame.shape[1], frame.shape[0],
+                         QImage.Format_RGB888)
+            return img
+        except:
+            return None
+
     def getAffineTransform(self, coord1, coord2):
         """!
         @brief      Find the affine matrix transform between 2 sets of corresponding coordinates.
@@ -171,7 +188,110 @@ class Camera():
                     TODO: Implement your block detector here. You will need to locate blocks in 3D space and put their XYZ
                     locations in self.block_detections
         """
-        pass
+
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        colors = list((
+            {'id': 'red', 'color': (10, 10, 127)},
+            {'id': 'orange', 'color': (30, 75, 150)},
+            {'id': 'yellow', 'color': (30, 175, 200)},
+            {'id': 'green', 'color': (20, 60, 20)},
+            {'id': 'blue', 'color': (100, 50, 0)},
+            {'id': 'violet', 'color': (100, 40, 80)},
+            {'id': 'black', 'color': (10,20,20)})
+        )
+
+        def retrieve_area_color(data, contour, labels):
+            mask = np.zeros(data.shape[:2], dtype="uint8")
+            cv2.drawContours(mask, [contour], -1, 255, -1)
+            mean = cv2.mean(data, mask=mask)[:3]
+            min_dist = (np.inf, None)
+            for label in labels:
+                d = np.linalg.norm(label["color"] - np.array(mean))
+                if d < min_dist[0]:
+                    min_dist = (d, label["id"])
+            return min_dist[1] 
+
+        # Need arguments: 
+        # image
+        # lower
+        # upper
+        # depth - depth image
+        print("In camera.blockDetector(): ")
+        image = self.VideoFrame
+        lower = 950
+        upper = 972
+        depth_image = self.DepthFrameRGB
+
+        rgb_image = image
+        cnt_image = image
+        depth_data = depth_image
+        # depth_data = cv2.imread(args["depth"], cv2.IMREAD_ANYCOLOR | cv2.IMREAD_ANYDEPTH)
+        cv2.namedWindow("Image window", cv2.WINDOW_NORMAL)
+        #cv2.namedWindow("Threshold window", cv2.WINDOW_NORMAL)
+        """mask out arm & outside board"""
+        mask = np.zeros_like(depth_data, dtype=np.uint8)
+
+        cv2.rectangle(mask, (180,85),(1020,680), 255, cv2.FILLED)
+        cv2.rectangle(mask, (502,79),(685,403), 0, cv2.FILLED)
+        cv2.rectangle(cnt_image, (180,85),(1020,680), (255, 0, 0), 2)
+        cv2.rectangle(cnt_image, (502,79),(685,403), (255, 0, 0), 2)
+
+        cv2.imshow("mask", mask)
+
+        # threshold for depth: keeps 
+        thresh = cv2.bitwise_and(cv2.inRange(depth_data, lower, upper), mask)
+
+        cv2.imshow("Threshold window", thresh)
+
+        kernel = np.ones((22,22), np.uint8)
+        closing = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
+        cv2.imshow("Closing ", closing)
+
+        # depending on your version of OpenCV, the following line could be:
+        # contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        _, contours, _ = cv2.findContours(closing, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
+        cv2.drawContours(cnt_image, contours, -1, (0,255,255), thickness=1)
+
+
+        print("Number of contours found: ", len(contours))
+
+
+        # (cx, cy) is the (u,v) coord. in image frame
+        # World_coord(X, Y, Z, 1) = ext * intrinsic * (cx, cy, 1)
+
+        def img_to_world_coord(cx, cy):
+            intrinsic_matrix = np.array([[942.3094 , 0 , 637.3339] , [0 , 945.0566 , 357.1129] , [0 , 0 , 1]])
+            extrinsic_matrix = np.array([[-1 , 0 , -0.025] , [0 , 1 , 0.160] , [0 , 0 , 1]])
+            A_inv = np.linalg.inv(intrinsic_matrix)
+            pt_in_cam = np.matmul(A_inv , np.array([cx, cy, 1]))
+            pt_in_world = np.matmul(np.linalg.inv(extrinsic_matrix) , pt_in_cam)
+            return pt_in_world[0:3] # return x,y,z
+
+
+        for contour in contours:
+            color = retrieve_area_color(rgb_image, contour, colors)
+            theta = cv2.minAreaRect(contour)[2]
+            M = cv2.moments(contour)
+            # division by zero if NOT found blocks
+            cx = int(M['m10']/M['m00'])
+            cy = int(M['m01']/M['m00'])
+            cv2.putText(cnt_image, color, (cx-30, cy+40), font, 1.0, (0,0,0), thickness=2)
+            cv2.putText(cnt_image, str(int(theta)), (cx, cy), font, 0.5, (255,255,255), thickness=2)
+
+            wx, wy, wz = img_to_world_coord(cx, cy)
+
+            print(color, "theta(deg) "  ,int(theta), cx, cy, " world ", wx, wy, wz)
+            
+            # Write cnt_image to self.BlockDetectImage
+        
+        self.BlockDetectFrame = cnt_image
+
+        # cv2.imshow("Image window", cnt_image)
+        # k = cv2.waitKey(0)
+        # if k == 27:
+        #     cv2.destroyAllWindows()
+
+        # pass
 
     def detectBlocksInDepthImage(self):
         """!
@@ -258,7 +378,7 @@ class DepthListener:
 
 
 class VideoThread(QThread):
-    updateFrame = pyqtSignal(QImage, QImage, QImage)
+    updateFrame = pyqtSignal(QImage, QImage, QImage, QImage)
 
     def __init__(self, camera, parent=None):
         QThread.__init__(self, parent=parent)
@@ -281,13 +401,15 @@ class VideoThread(QThread):
             cv2.namedWindow("Image window", cv2.WINDOW_NORMAL)
             cv2.namedWindow("Depth window", cv2.WINDOW_NORMAL)
             cv2.namedWindow("Tag window", cv2.WINDOW_NORMAL)
+            cv2.namedWindow("Block window", cv2.WINDOW_NORMAL)
             time.sleep(0.5)
         while True:
             rgb_frame = self.camera.convertQtVideoFrame()
             depth_frame = self.camera.convertQtDepthFrame()
             tag_frame = self.camera.convertQtTagImageFrame()
+            block_frame = self.camera.convertQtBlockFrame()
             if ((rgb_frame != None) & (depth_frame != None)):
-                self.updateFrame.emit(rgb_frame, depth_frame, tag_frame)
+                self.updateFrame.emit(rgb_frame, depth_frame, tag_frame, block_frame)
             time.sleep(0.03)
             if __name__ == '__main__':
                 cv2.imshow(
@@ -297,6 +419,10 @@ class VideoThread(QThread):
                 cv2.imshow(
                     "Tag window",
                     cv2.cvtColor(self.camera.TagImageFrame, cv2.COLOR_RGB2BGR))
+                cv2.imshow(
+                    "Block window",
+                    cv2.cvtColor(self.camera.BlockFrame, cv2.COLOR_RGB2BGR))
+
                 cv2.waitKey(3)
                 time.sleep(0.03)
 

@@ -359,19 +359,28 @@ def pose_ik_elbow_down(pose, orientation, dh_params):
     theta0 = angle_base
     theta0_w_pi = pi + theta0
 
+    # let's try out a new way to calculate theta2 and theta1!
+    # print('elbow_down: debug cos = ', (l2**2 + l1**2 - x_c**2 + y_c**2 - z_c**2) / (2*l1*l2))
+    theta2 = np.pi + atan2(200,50) - acos((l2**2 + l1**2 - x_c**2 - y_c**2 - z_c**2) / (2*l1*l2)) # in radians
+    theta2 = clamp(theta2)
+    alpha = atan2(l2*sin(theta2 - atan2(200,50)), l1 + l2*cos(theta2 - atan2(200,50)))
+    theta1 = atan2(200,50) + alpha - atan2(z_c, sqrt(x_c**2 + y_c**2))
+    theta1 = clamp(theta1)
+    # Make Shoulder smaller by 10 deg
+    # theta1 -= radians(10) 
 
-    # Find 2 solutions for theta 2 (slide 9) --> is theta 2 in slides
-    theta2 = acos( ((sqrt(x_c**2 + y_c**2) + z_c**2) - l1**2 - l2**2) / 2*l1*l2)
-    
-    # theta2 = theta2 / 2 #
-
-    # theta2 is elbow up, we get NEGATIVE theta2_calculated (we are in elbow up)
-    theta1 = atan2(z_c, sqrt(x_c**2 + y_c**2)) - atan2(l2*sin(theta2), l1+l2*cos(theta2)) 
+    # # Find 2 solutions for theta 2 (slide 9) --> is theta 2 in slides
+    # theta2 = acos( ((x_c**2 + y_c**2 + z_c**2) - l1**2 - l2**2) / 2*l1*l2)   
+    # # theta2 is elbow up, we get NEGATIVE theta2_calculated (we are in elbow up)
+    # theta1 = atan2(z_c, sqrt(x_c**2 + y_c**2)) - atan2(l2*sin(theta2), l1+l2*cos(theta2)) 
 
 
-    theta2 = atan2(200,50) + theta2 
-    # theta2 = theta2 + radians(12)   
-    theta1 = atan2(200,50) - theta1 # handle offset
+    # theta2 = atan2(200,50) + theta2 
+    # theta1 = atan2(200,50) - theta1 # handle offset
+
+    # theta2 = clamp(theta2)
+    # theta1 = clamp(theta1)
+    # theta1 = np.pi / 2.0 - atan2(50, 200) - theta1
 
     
     # theta1 = theta1 + radians(12)
@@ -380,8 +389,10 @@ def pose_ik_elbow_down(pose, orientation, dh_params):
 
     ## Easy way to find theta4 & theta5
     theta_4 = theta1 - theta2 - pitch
+    theta_4 = clamp(theta_4)
     theta_5 = 0 
     theta_4_negative = -theta_4
+    theta_4_negative = clamp(theta_4_negative)
 
 
     # Check for joint limits!
@@ -448,21 +459,46 @@ def pose_ik_elbow_up(pose, orientation, dh_params):
     theta0 = angle_base
     theta0_w_pi = pi + theta0
 
-    theta2 = -acos( ((sqrt(x_c**2 + y_c**2) + z_c**2) - l1**2 - l2**2) / 2*l1*l2)
-    theta1 = atan2(z_c, sqrt(x_c**2 + y_c**2)) - atan2(l2*sin(theta2), l1+l2*cos(theta2))
+    # let's try out a new way to calculate theta2 and theta1!
+    # print('l1', l1, 'l2', l2, 'x_c', x_c, 'y_c', y_c, 'z_c', z_c)
+    # print('l1**2 ', l1**2, 'l2**2 ', l2**2, '2*l1*l2 ', 2*l1*l2)
+    # print('xc**2 + yc**2 + zc**2 ', x_c**2 + y_c**2 + z_c**2)
+    # print('elobw_up debug cos = ', (l2**2 + l1**2 - x_c**2 - y_c**2 - z_c**2) / (2*l1*l2) )
+    # theta2 = radians(256) - acos((l2**2 + l1**2 - x_c**2 - y_c**2 - z_c**2) / (2*l1*l2)) # in radians
+    # theta2 = clamp(theta2)
+    theta2 = acos((-l2**2 - l1**2 + x_c**2 + y_c**2 + z_c**2) / (-2*l1*l2)) - atan2(200,50)# in radians
+    theta2 = clamp(theta2)
+    alpha = atan2(l2*sin(theta2 - atan2(200, 50)), l1 + l2*cos(theta2 - atan2(200,50)))
+    theta1 = atan2(200 , 50) + alpha - atan2(z_c, sqrt(x_c**2 + y_c**2))
+    theta1 = clamp(theta1)
 
-    theta2 = atan2(200,50) + theta2 
+    # Make Shoulder smaller by 10 deg
+    # theta1 -= radians(10) 
+    
+    # print("theta1, theta2: ", theta1, theta2)
+
+    # print('working cos = ', (x_c**2 + y_c**2 + z_c**2 - l1**2 - l2**2) / 2*l1*l2 ) 
+    # theta2 = -acos( (x_c**2 + y_c**2 + z_c**2 - l1**2 - l2**2) / (2*l1*l2) )
+    # theta1 = atan2(z_c, sqrt(x_c**2 + y_c**2)) - atan2(l2*sin(theta2), l1+l2*cos(theta2))
+
+    # theta2 = atan2(200,50) + theta2 
+    # # theta2 = theta2 + np.pi / 2.0
     # theta2 = theta2 + radians(12)   
-    theta1 = atan2(200,50) - theta1 # handle offset
+    # theta2 = clamp(theta2)
+    # theta1 = atan2(200,50) - theta1 # handle offset
     # theta1 = theta1 + radians(12)
+    # theta1 = clamp(theta1)
+    # theta1 = np.pi / 2.0 - atan2(50, 200) - theta1
     # Now that we have theta 0, 1, and 2, we can find orientation of the wrist R_3^0 using forward kinematics (slide 24)
 
 
     ## Easy way to find theta4 & theta5
     # Wrist Angle = Shoulder - Elbow - Pitch
     theta_4 = theta1 - theta2 - pitch
+    theta_4 = clamp(theta_4)
     theta_5 = 0 
     theta_4_negative = -theta_4
+    theta_4_negative = clamp(theta_4_negative)
 
 
     # Check for joint limits!
@@ -500,8 +536,28 @@ def IK_geometric(dh_params, pose):
 
 
     # 
+
+
     x, y, z, phi, theta, psi = pose
-    p = (x, y, z+ 0.00) # add 5cm to z
+    
+    # offset for (x, y)
+    constant_offset = 7.00/100 # 3cm
+    print("Before offset (x,y) ", x, y)
+    base_angle = atan2(abs(x), abs(y))
+    dx = constant_offset*sin(base_angle) 
+    dy = constant_offset*cos(base_angle)
+    if x <= 0.0:
+        x = x + dx
+    else:
+        x = x - dx
+    if y <= 0:
+        y = y + dy
+    else:
+        y = y - dy
+
+    print("After offset (x,y) ", x, y)
+
+    p = (x, y, z+ 0.0) # add 5cm to z
     ori = (phi, theta, psi)
     el_up = pose_ik_elbow_up(p,
                              ori,

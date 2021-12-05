@@ -148,8 +148,8 @@ class StateMachine():
     def get_pitch_based_on_target_distance(self, target_pose):
         dx, dy, dz = target_pose
         euc_dist = sqrt( dx**2 + dy**2 + dz**2 )
-        if euc_dist < 45.00/100: # 24 cm
-            return 90*D2R  # Constant 90 deg Pitch
+        if euc_dist < 36.00/100: # 24 cm
+            return 80*D2R  # Constant 90 deg Pitch
         else:
             return 45*D2R # Constant 0 deg Pitch
 
@@ -172,6 +172,9 @@ class StateMachine():
                 z = self.camera.DepthFrameRaw[pt[1]][pt[0]]
                 pt_in_world = self.camera.transform_pixel_to_world(pt[0], pt[1])
                 pt_in_world = np.append(pt_in_world , (972.0 - z)/1000  )
+
+
+
                 # wrist angles for grasp in radians
                 phi =  0
                 theta = 0 
@@ -182,16 +185,16 @@ class StateMachine():
                 
                 pose = np.append(pt_in_world, np.array([phi, theta, psi]))
                 
-                elbow_status = self.get_elbow_orientation(pt_in_world) # 0 is up, 1 is down
-
-                print("elbow_status: (0:up, 1: down) ", elbow_status)
                 # Append a pose just above it
-                waypoint_offset = 0.2 # 20cm above
-                first_pose = np.append(np.array([pt_in_world[0], pt_in_world[1], pt_in_world[2]+waypoint_offset]), np.array([phi, theta, psi]))
+                waypoint_offset = 0.04 # 4cm above
+                inter_waypoint = np.array([pt_in_world[0], pt_in_world[1], pt_in_world[2]+waypoint_offset])
+                inter_elbow_status = self.get_elbow_orientation(inter_waypoint) # 0 is up, 1 is down
+                print("inter_elbow_status: (0:up, 1: down) ", inter_elbow_status)
+                first_pose = np.append( inter_waypoint, np.array([phi, theta, psi]))
                 
                 print("Inter waypoint: ", first_pose)
                 upper_joint_positions = IK_geometric(self.rxarm.dh_params, first_pose)
-                upper_joint_positions = self.rxarm.find_best_soluton(upper_joint_positions, elbow_status, pose[2]) # pose[2] is the target_z
+                upper_joint_positions = self.rxarm.find_best_soluton(upper_joint_positions, inter_elbow_status, pose[2]) # pose[2] is the target_z
                 print("add first waypoint: (deg)", upper_joint_positions*R2D)
                 self.waypoints.append(upper_joint_positions) # Takes elbow_down sol
                 if i==0:
@@ -200,6 +203,12 @@ class StateMachine():
                     self.replay_buffer.append(0) # Current carrying a block, don't open gripper
                 
                 # Add Target Point
+                elbow_status = self.get_elbow_orientation(pt_in_world) # 0 is up, 1 is down
+                print("elbow_status: (0:up, 1: down) ", elbow_status)   
+                if i==0:
+                    pose[2] -= 0.015 
+                else:
+                    pose[2] += 0.02 # add 2cm in z when "placing" the block
                 joint_positions = IK_geometric(self.rxarm.dh_params, pose)
                 joint_positions = self.rxarm.find_best_soluton(joint_positions, elbow_status, pose[2])
 

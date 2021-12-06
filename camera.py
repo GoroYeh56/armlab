@@ -218,7 +218,7 @@ class Camera():
         # depth - depth image
         print("In camera.blockDetector(): ")
         image = self.VideoFrame
-        lower = 950
+        lower = 900
         upper = 972
         depth_image = self.DepthFrameRGB
 
@@ -226,33 +226,29 @@ class Camera():
         cnt_image = image
         depth_data = depth_image
         # depth_data = cv2.imread(args["depth"], cv2.IMREAD_ANYCOLOR | cv2.IMREAD_ANYDEPTH)
-        cv2.namedWindow("Image window", cv2.WINDOW_NORMAL)
-        #cv2.namedWindow("Threshold window", cv2.WINDOW_NORMAL)
+
+
         """mask out arm & outside board"""
-        mask = np.zeros_like(depth_data, dtype=np.uint8)
+        mask = np.zeros_like(self.DepthFrameRaw, dtype=np.uint8)
 
         cv2.rectangle(mask, (180,85),(1020,680), 255, cv2.FILLED)
         cv2.rectangle(mask, (502,79),(685,403), 0, cv2.FILLED)
         cv2.rectangle(cnt_image, (180,85),(1020,680), (255, 0, 0), 2)
         cv2.rectangle(cnt_image, (502,79),(685,403), (255, 0, 0), 2)
-
-        cv2.imshow("mask", mask)
+        # cv2.imshow("mask", mask)
 
         # threshold for depth: keeps 
         thresh = cv2.bitwise_and(cv2.inRange(depth_data, lower, upper), mask)
-
-        cv2.imshow("Threshold window", thresh)
+        # cv2.imshow("Threshold window", thresh)
 
         kernel = np.ones((22,22), np.uint8)
         closing = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
-        cv2.imshow("Closing ", closing)
+        # cv2.imshow("Closing ", closing)
 
         # depending on your version of OpenCV, the following line could be:
         # contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         _, contours, _ = cv2.findContours(closing, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
         cv2.drawContours(cnt_image, contours, -1, (0,255,255), thickness=1)
-
-
         print("Number of contours found: ", len(contours))
 
 
@@ -273,6 +269,9 @@ class Camera():
             theta = cv2.minAreaRect(contour)[2]
             M = cv2.moments(contour)
             # division by zero if NOT found blocks
+            if M['m00']==0:
+                continue
+            # else: NOT 0
             cx = int(M['m10']/M['m00'])
             cy = int(M['m01']/M['m00'])
             cv2.putText(cnt_image, color, (cx-30, cy+40), font, 1.0, (0,0,0), thickness=2)

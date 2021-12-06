@@ -108,7 +108,7 @@ class Gui(QMainWindow):
         self.ui.btnUser9.setText('Pick and Place')
         self.ui.btnUser9.clicked.connect(partial(nxt_if_arm_init, 'pick_place'))
         self.ui.btnUser10.setText('Detect Blocks')
-        self.ui.btnUser10.clicked.connect(lambda: self.camera.blockDetector())
+        self.ui.btnUser10.clicked.connect(partial(lambda: self.camera.blockDetector()))
 
 
 

@@ -10,7 +10,7 @@ import numpy as np
 from math import atan2, pi, acos, sqrt, cos, sin, degrees, radians, atan
 # expm is a matrix exponential function
 from scipy.linalg import expm
-from scipy.spatial.transform import Rotation as R
+# from scipy.spatial.transform import Rotation as R
 # from state_machine import D2R
 
 # in degrees

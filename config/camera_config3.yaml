@@ -1,0 +1,47 @@
+!!python/object/new:dynamic_reconfigure.encoding.Config
+dictitems:
+  auto_exposure_priority: true
+  backlight_compensation: 128
+  brightness: 24
+  contrast: 71
+  enable_auto_exposure: true
+  enable_auto_white_balance: true
+  exposure: 335
+  frames_queue_size: 16
+  gain: 256
+  global_time_enabled: false
+  groups: !!python/object/new:dynamic_reconfigure.encoding.Config
+    dictitems:
+      auto_exposure_priority: true
+      backlight_compensation: 128
+      brightness: 24
+      contrast: 71
+      enable_auto_exposure: true
+      enable_auto_white_balance: true
+      exposure: 335
+      frames_queue_size: 16
+      gain: 256
+      global_time_enabled: false
+      groups: !!python/object/new:dynamic_reconfigure.encoding.Config
+        state: []
+      host_performance: 0
+      hue: 5
+      id: 0
+      name: Default
+      parameters: !!python/object/new:dynamic_reconfigure.encoding.Config
+        state: []
+      parent: 0
+      power_line_frequency: 1
+      saturation: 80
+      sharpness: 68
+      state: true
+      type: ''
+      white_balance: 3367.0
+    state: []
+  host_performance: 0
+  hue: 5
+  power_line_frequency: 1
+  saturation: 80
+  sharpness: 68
+  white_balance: 3367.0
+state: []

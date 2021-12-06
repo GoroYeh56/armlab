@@ -190,20 +190,21 @@ class Camera():
         """
 
         font = cv2.FONT_HERSHEY_SIMPLEX
-        colors = list((
-            {'id': 'red', 'color': (10, 10, 127)},
-            {'id': 'orange', 'color': (30, 75, 150)},
-            {'id': 'yellow', 'color': (30, 175, 200)},
-            {'id': 'green', 'color': (20, 60, 20)},
-            {'id': 'blue', 'color': (100, 50, 0)},
-            {'id': 'violet', 'color': (100, 40, 80)},
-            {'id': 'black', 'color': (10,20,20)})
+        colors = list(( # in RGB order
+            {'id': 'red', 'color': (208, 49, 56)}, #bgr
+            {'id': 'orange', 'color': (255, 169, 35)},
+            {'id': 'yellow', 'color': (255, 255, 27)},
+            {'id': 'green', 'color': (60, 166, 100)},
+            {'id': 'blue', 'color': (24, 132, 241)},
+            {'id': 'violet', 'color': (110, 95, 198)},
+            {'id': 'black', 'color': (20,20,10)})
         )
 
         def retrieve_area_color(data, contour, labels):
             mask = np.zeros(data.shape[:2], dtype="uint8")
             cv2.drawContours(mask, [contour], -1, 255, -1)
             mean = cv2.mean(data, mask=mask)[:3]
+            print("mean: ", mean)
             min_dist = (np.inf, None)
             for label in labels:
                 d = np.linalg.norm(label["color"] - np.array(mean))
@@ -218,10 +219,8 @@ class Camera():
         # depth - depth image
         print("In camera.blockDetector(): ")
         image = self.VideoFrame
-
-
         center = 940
-        width = 10
+        width = 20
         lower = center-width
         upper = center+width
         depth_image = self.DepthFrameRaw
@@ -250,10 +249,10 @@ class Camera():
         thresh = cv2.bitwise_and(cv2.inRange(depth_data, lower, upper), mask)
         # cv2.imshow("Threshold window", thresh)
 
-        kernel = np.ones((22,22), np.uint8)
+        kernel = np.ones((10,10), np.uint8)
         closing = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
         # cv2.imshow("Closing ", closing)
-        
+        closing = thresh
 
         # depending on your version of OpenCV, the following line could be:
         # contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -275,8 +274,18 @@ class Camera():
 
 
         for contour in contours:
+            print("countour: ",contour)
+            print("cv2.minAreaRect(contour) ",cv2.minAreaRect(contour))
             color = retrieve_area_color(rgb_image, contour, colors)
             theta = cv2.minAreaRect(contour)[2]
+            block_dim = cv2.minAreaRect(contour)[1]
+            
+            # smal block = 0 , large block = 1
+            if (block_dim[0] < 35.0) and (block_dim[1] < 35.0):
+                block_size = "small"
+            else:
+                block_size = "large"
+
             M = cv2.moments(contour)
             # division by zero if NOT found blocks
             if M['m00']==0:
@@ -285,6 +294,7 @@ class Camera():
             cx = int(M['m10']/M['m00'])
             cy = int(M['m01']/M['m00'])
             cv2.putText(cnt_image, color, (cx-30, cy+40), font, 1.0, (0,0,0), thickness=2)
+            cv2.putText(cnt_image, block_size, (cx-30, cy+60), font, 0.5, (255,0,0), thickness=2)
             cv2.putText(cnt_image, str(int(theta)), (cx, cy), font, 0.5, (255,255,255), thickness=2)
 
             wx, wy, wz = img_to_world_coord(cx, cy)
@@ -325,6 +335,7 @@ class ImageListener:
         except CvBridgeError as e:
             print(e)
         self.camera.VideoFrame = cv_image
+        # self.camera.BlockDetectFrame = self.camera.blockDetector()
 
 
 class TagImageListener:

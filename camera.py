@@ -218,9 +218,13 @@ class Camera():
         # depth - depth image
         print("In camera.blockDetector(): ")
         image = self.VideoFrame
-        lower = 900
-        upper = 972
-        depth_image = self.DepthFrameRGB
+
+
+        center = 940
+        width = 10
+        lower = center-width
+        upper = center+width
+        depth_image = self.DepthFrameRaw
 
         rgb_image = image
         cnt_image = image
@@ -237,13 +241,19 @@ class Camera():
         cv2.rectangle(cnt_image, (502,79),(685,403), (255, 0, 0), 2)
         # cv2.imshow("mask", mask)
 
-        # threshold for depth: keeps 
+        # threshold for depth:  thresh[i][j] = 1 if depth_data[i][j] within [lower, upper]
+        # mask: Other than robot arm: All set to 1 (255 => 8bit: 11111111)
+        # Only keeps detected area 1, others 0
+
+        # print("shape", cv2.inRange(depth_data, lower, upper).shape)
+        # print(cv2.inRange(depth_data, lower, upper))
         thresh = cv2.bitwise_and(cv2.inRange(depth_data, lower, upper), mask)
         # cv2.imshow("Threshold window", thresh)
 
         kernel = np.ones((22,22), np.uint8)
         closing = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
         # cv2.imshow("Closing ", closing)
+        
 
         # depending on your version of OpenCV, the following line could be:
         # contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)

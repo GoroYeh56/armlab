@@ -610,26 +610,56 @@ class StateMachine():
 
         # block_height = 0.0375
         # block_height_sm = 0.024 # 2.4cm
-        block_height = 0.0275
-        block_height_sm = 0.015 # 2.4cm
-
-        x_offset = 0.0075 # 0.5cm
-        z = -0.03
+        block_height0 = 0.04
+        block_height1 = 0.035
+        block_height2 = 0.0275
+        x_offset0 = 0.012
+        x_offset1 = 0.008
+        x_offset2 = 0.0075 # 0.5cm
+        z0 = 0.008 # 0.8 cm
+        z1 = -0.005
+        z2 = -0.03
         dest_poses = [
-            [0.2, -0.005, z, phi, theta, psi],
-            [0.2+x_offset, -0.005, z + block_height, phi, theta, psi],
-            [0.2+2*x_offset, -0.005, z +2*block_height+0.002,  phi, theta, psi]
-            
+            [0.4, -0.005, z0, phi, theta, psi],
+            [0.4+  x_offset0, -0.005, z0 + block_height0, phi, theta, psi],
+            [0.4+2*x_offset0, -0.005, z0 +2*block_height0+0.006,  phi, theta, psi],
+            [0.3, -0.005, z1, phi, theta, psi],
+            [0.3+x_offset1, -0.005, z1 + block_height1, phi, theta, psi],
+            [0.3+2*x_offset1, -0.005, z1 +2*block_height1+0.002,  phi, theta, psi],
+            [0.18, -0.005, z2, phi, theta, psi],
+            [0.18+x_offset2, -0.005, z2 + block_height2, phi, theta, psi],
+            [0.18+2*x_offset2, -0.005, z2 +2*block_height2+0.002,  phi, theta, psi]
+        ]
+        
+        block_height_sm0 = 0.025 # 2.4cm        
+        block_height_sm1 = 0.02 # 2.4cm
+        block_height_sm2 = 0.0185 # 2.4cm
+        # small destinations
+        z_sm0 =  0.00
+        z_sm1 = -0.01
+        z_sm2 = -0.35 # - 1 cm
+        x_offset_sm0 = 0.005
+        x_offset_sm1 = 0.0018
+        x_offset_sm2 = 0.002 # 0.2cm
+        # dest_poses_sm = [
+        #     [-0.2, -0.005, z_sm, phi, theta, psi],
+        #     [-0.2-x_offset_sm, -0.005, z_sm + block_height_sm, phi, theta, psi],
+        #     [-0.2-2*x_offset_sm, -0.005, z_sm+2*block_height_sm,  phi, theta, psi]
+        # ]
+        # level3:
+        dest_poses_sm = [
+            [-0.4, -0.005, z_sm0, phi, theta, psi],
+            [-0.4-x_offset_sm0, -0.005, z_sm0 + block_height_sm0, phi, theta, psi],
+            [-0.4-2*x_offset_sm0, -0.005, z_sm0+2*block_height_sm0+0.002,  phi, theta, psi],
+            [-0.3, -0.005, z_sm1, phi, theta, psi],
+            [-0.3-x_offset_sm1, -0.005, z_sm1 + block_height_sm1, phi, theta, psi],
+            [-0.3-2*x_offset_sm1, -0.005, z_sm1+2*block_height_sm1,  phi, theta, psi],
+            [-0.18, -0.005, z_sm2, phi, theta, psi],
+            [-0.18-x_offset_sm2, -0.005, z_sm2 + block_height_sm2, phi, theta, psi],
+            [-0.18-2*x_offset_sm2, -0.005, z_sm2+2*block_height_sm2,  phi, theta, psi]
         ]
 
-        # small destinations
-        z_sm = -0.035 # - 1 cm
-        x_offset_sm = 0.002 # 0.2cm
-        dest_poses_sm = [
-            [-0.2, -0.005, z_sm, phi, theta, psi],
-            [-0.2-x_offset_sm, -0.005, z_sm + block_height_sm, phi, theta, psi],
-            [-0.2-2*x_offset_sm, -0.005, z_sm+2*block_height_sm,  phi, theta, psi]
-        ]
+
 
         def my_custom_sort(block):
             custom_order = ['red', 'orange', 'yellow', 'green', 'blue', 'violet']
@@ -739,6 +769,25 @@ class StateMachine():
         print("Done event2")
 
     def line_em_up(self):
+
+
+        reset_joint_config = np.array([-1.67, 0,  0, 0, 0])
+
+        # After placing each block, set_joint_position(reset_joint_config)
+        # and run blockDetector again
+
+        Blocks = self.camera.blockDetector()
+
+        while Blocks:
+
+
+            # After placing:
+            self.rxarm.set_positions(reset_joint_config)
+            Blocks = self.camera.blockDetector()
+
+
+            pass
+
 
         pass
 

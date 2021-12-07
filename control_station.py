@@ -109,6 +109,21 @@ class Gui(QMainWindow):
         self.ui.btnUser9.clicked.connect(partial(nxt_if_arm_init, 'pick_place'))
         self.ui.btnUser10.setText('Detect Blocks')
         self.ui.btnUser10.clicked.connect(partial(lambda: self.camera.blockDetector()))
+ 
+
+        ### Competition ###
+        # Event1: Pick n sort
+        self.ui.btnUser11.setText('Pick n sort')
+        self.ui.btnUser11.clicked.connect(partial(lambda: self.sm.pick_n_sort()))
+        # Event2: Pick n stack
+        self.ui.btnUser12.setText('Pick n stack')
+        self.ui.btnUser12.clicked.connect(partial(lambda: self.sm.pick_n_stack()))
+        # Event3: Line 'em' up
+        self.ui.btnUser13.setText('Line em up')
+        self.ui.btnUser13.clicked.connect(partial(lambda: self.sm.line_em_up()))
+        # Event4: Stack 'em' high
+        self.ui.btnUser14.setText('Stack em high')
+        self.ui.btnUser14.clicked.connect(partial(lambda: self.sm.stack_em_high()))
 
 
 

@@ -15,6 +15,19 @@ from sensor_msgs.msg import CameraInfo
 from apriltag_ros.msg import *
 from cv_bridge import CvBridge, CvBridgeError
 
+from math import radians, degrees
+
+class Block():
+    """!
+    @brief      This class describes a block
+    """
+    def __init__(self, size_, color_, wx_, wy_, wz_, ori_):
+        self.size = size_
+        self.color = color_
+        self.wx = wx_ # meter
+        self.wy = wy_
+        self.wz = wz_
+        self.ori = ori_ # in radians
 
 class Camera():
     """!
@@ -191,14 +204,13 @@ class Camera():
 
         font = cv2.FONT_HERSHEY_SIMPLEX
         colors = list(( # in RGB order
-            {'id': 'red', 'color': (208, 49, 56)}, #bgr
+            {'id': 'red', 'color': (220, 49, 56)}, #bgr 208
             {'id': 'orange', 'color': (255, 169, 35)},
             {'id': 'yellow', 'color': (255, 255, 27)},
             {'id': 'green', 'color': (60, 166, 100)},
             {'id': 'blue', 'color': (24, 132, 241)},
-            {'id': 'violet', 'color': (110, 95, 198)},
-            {'id': 'black', 'color': (20,20,10)})
-        )
+            {'id': 'violet', 'color': (110, 95, 198)}
+        ))
 
         def retrieve_area_color(data, contour, labels):
             mask = np.zeros(data.shape[:2], dtype="uint8")
@@ -252,7 +264,7 @@ class Camera():
         kernel = np.ones((10,10), np.uint8)
         closing = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
         # cv2.imshow("Closing ", closing)
-        closing = thresh
+        # closing = thresh
 
         # depending on your version of OpenCV, the following line could be:
         # contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -273,9 +285,13 @@ class Camera():
             return pt_in_world[0:3] # return x,y,z
 
 
+
+
+        Blocks = []
+
         for contour in contours:
-            print("countour: ",contour)
-            print("cv2.minAreaRect(contour) ",cv2.minAreaRect(contour))
+            # print("countour: ",contour)
+            # print("cv2.minAreaRect(contour) ",cv2.minAreaRect(contour))
             color = retrieve_area_color(rgb_image, contour, colors)
             theta = cv2.minAreaRect(contour)[2]
             block_dim = cv2.minAreaRect(contour)[1]
@@ -297,13 +313,27 @@ class Camera():
             cv2.putText(cnt_image, block_size, (cx-30, cy+60), font, 0.5, (255,0,0), thickness=2)
             cv2.putText(cnt_image, str(int(theta)), (cx, cy), font, 0.5, (255,255,255), thickness=2)
 
-            wx, wy, wz = img_to_world_coord(cx, cy)
+            # wx, wy, wz = img_to_world_coord(cx, cy)
+            wx, wy = self.transform_pixel_to_world(cx, cy)
+
+            z = self.DepthFrameRaw[cy][cx]
+            wz = (972.0 - z)/1000 
+
 
             print(color, "theta(deg) "  ,int(theta), cx, cy, " world ", wx, wy, wz)
             
+
+            Blocks.append(Block(block_size, color, wx, wy, wz, radians(theta)) )
             # Write cnt_image to self.BlockDetectImage
         
         self.BlockDetectFrame = cnt_image
+
+
+        # TODO: return: Blocks (a list of block)
+        # Each 'Block': an object that has:
+        # size(large/small), color, (world x,y,z), orientation
+        return Blocks
+
 
         # cv2.imshow("Image window", cnt_image)
         # k = cv2.waitKey(0)

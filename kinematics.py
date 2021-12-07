@@ -347,7 +347,7 @@ def pose_ik_elbow_down(pose, orientation, dh_params):
     z_c = z + l6*sin(pitch)
     z_c = z_c - (103.91/1000)
 
-    print("oc: ", x_c, y_c, z_c)
+    # print("oc: ", x_c, y_c, z_c)
 
     pitch = psi
     theta = 0
@@ -361,11 +361,19 @@ def pose_ik_elbow_down(pose, orientation, dh_params):
 
     # let's try out a new way to calculate theta2 and theta1!
     # print('elbow_down: debug cos = ', (l2**2 + l1**2 - x_c**2 + y_c**2 - z_c**2) / (2*l1*l2))
-    theta2 = np.pi + atan2(200,50) - acos((l2**2 + l1**2 - x_c**2 - y_c**2 - z_c**2) / (2*l1*l2)) # in radians
+    # theta2 = np.pi + atan2(200,50) - acos((l2**2 + l1**2 - x_c**2 - y_c**2 - z_c**2) / (2*l1*l2)) # in radians
+    # theta2 = clamp(theta2)
+    # alpha = atan2(l2*sin(theta2 - atan2(200,50)), l1 + l2*cos(theta2 - atan2(200,50)))
+    # theta1 = atan2(200,50) + alpha - atan2(z_c, sqrt(x_c**2 + y_c**2))
+    # theta1 = clamp(theta1)
+
+    theta2 = acos((-l2**2 - l1**2 + x_c**2 + y_c**2 + z_c**2) / (-2*l1*l2)) - atan2(200,50)# in radians
     theta2 = clamp(theta2)
-    alpha = atan2(l2*sin(theta2 - atan2(200,50)), l1 + l2*cos(theta2 - atan2(200,50)))
-    theta1 = atan2(200,50) + alpha - atan2(z_c, sqrt(x_c**2 + y_c**2))
+    alpha = atan2(l2*sin(theta2 - atan2(200, 50)), l1 + l2*cos(theta2 - atan2(200,50)))
+    theta1 = atan2(200 , 50) + alpha - atan2(z_c, sqrt(x_c**2 + y_c**2))
     theta1 = clamp(theta1)
+
+
     # Make Shoulder smaller by 10 deg
     # theta1 -= radians(10) 
 
@@ -542,7 +550,7 @@ def IK_geometric(dh_params, pose):
     
     # offset for (x, y)
     constant_offset = 7.00/100 # 3cm
-    print("Before offset (x,y) ", x, y)
+    # print("Before offset (x,y) ", x, y)
     base_angle = atan2(abs(x), abs(y))
     dx = constant_offset*sin(base_angle) 
     dy = constant_offset*cos(base_angle)
@@ -555,7 +563,7 @@ def IK_geometric(dh_params, pose):
     else:
         y = y - dy
 
-    print("After offset (x,y) ", x, y)
+    # print("After offset (x,y) ", x, y)
 
     p = (x, y, z+ 0.0) # add 5cm to z
     ori = (phi, theta, psi)

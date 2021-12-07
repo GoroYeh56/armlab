@@ -2,11 +2,11 @@
 dictitems:
   auto_exposure_priority: true
   backlight_compensation: 128
-  brightness: 24
-  contrast: 71
-  enable_auto_exposure: true
-  enable_auto_white_balance: true
-  exposure: 335
+  brightness: 15
+  contrast: 63
+  enable_auto_exposure: false
+  enable_auto_white_balance: false
+  exposure: 300
   frames_queue_size: 16
   gain: 256
   global_time_enabled: false
@@ -14,11 +14,11 @@ dictitems:
     dictitems:
       auto_exposure_priority: true
       backlight_compensation: 128
-      brightness: 24
-      contrast: 71
-      enable_auto_exposure: true
-      enable_auto_white_balance: true
-      exposure: 335
+      brightness: 15
+      contrast: 63
+      enable_auto_exposure: false
+      enable_auto_white_balance: false
+      exposure: 300
       frames_queue_size: 16
       gain: 256
       global_time_enabled: false
@@ -32,16 +32,16 @@ dictitems:
         state: []
       parent: 0
       power_line_frequency: 1
-      saturation: 80
-      sharpness: 68
+      saturation: 73
+      sharpness: 77
       state: true
       type: ''
-      white_balance: 3367.0
+      white_balance: 2923.0
     state: []
   host_performance: 0
   hue: 5
   power_line_frequency: 1
-  saturation: 80
-  sharpness: 68
-  white_balance: 3367.0
+  saturation: 73
+  sharpness: 77
+  white_balance: 2923.0
 state: []

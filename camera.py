@@ -216,7 +216,7 @@ class Camera():
             mask = np.zeros(data.shape[:2], dtype="uint8")
             cv2.drawContours(mask, [contour], -1, 255, -1)
             mean = cv2.mean(data, mask=mask)[:3]
-            print("mean: ", mean)
+            # print("mean: ", mean)
             min_dist = (np.inf, None)
             for label in labels:
                 d = np.linalg.norm(label["color"] - np.array(mean))
@@ -261,7 +261,7 @@ class Camera():
         thresh = cv2.bitwise_and(cv2.inRange(depth_data, lower, upper), mask)
         # cv2.imshow("Threshold window", thresh)
 
-        kernel = np.ones((10,10), np.uint8)
+        kernel = np.ones((2,2), np.uint8)
         closing = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
         # cv2.imshow("Closing ", closing)
         # closing = thresh
@@ -297,7 +297,7 @@ class Camera():
             block_dim = cv2.minAreaRect(contour)[1]
             
             # smal block = 0 , large block = 1
-            if (block_dim[0] < 35.0) and (block_dim[1] < 35.0):
+            if (block_dim[0] < 40.0) and (block_dim[1] < 40.0):
                 block_size = "small"
             else:
                 block_size = "large"
@@ -320,7 +320,7 @@ class Camera():
             wz = (972.0 - z)/1000 
 
 
-            print(color, "theta(deg) "  ,int(theta), cx, cy, " world ", wx, wy, wz)
+            # print(color, "theta(deg) "  ,int(theta), cx, cy, " world ", wx, wy, wz)
             
 
             Blocks.append(Block(block_size, color, wx, wy, wz, radians(theta)) )

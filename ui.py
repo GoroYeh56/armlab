@@ -301,6 +301,10 @@ class Ui_MainWindow(object):
         self.btnUser14.setObjectName(_fromUtf8("btnUser14"))
         self.Group2.addWidget(self.btnUser14)
 
+        self.btnUser15 = QtGui.QPushButton(self.OutputFrame)
+        self.btnUser15.setAutoRepeatDelay(300)
+        self.btnUser15.setObjectName(_fromUtf8("btnUser15"))
+        self.Group2.addWidget(self.btnUser15)
 
 
 

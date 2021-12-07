@@ -83,6 +83,9 @@ class StateMachine():
         if self.next_state == "pick_place":
             self.pick_place()
 
+        # if self.next_state == "line_em_up":
+            # self.pick_place()
+
 
 
     """Functions run for each state"""
@@ -280,10 +283,10 @@ class StateMachine():
                 pass
             elif self.replay_buffer[index] == 1: # open
                 self.rxarm.open_gripper()
-                rospy.sleep(1)
+                rospy.sleep(1.5)
             else: # close gripper -1
                 self.rxarm.close_gripper()
-                rospy.sleep(1)
+                rospy.sleep(1.5)
 
             print(wp)
             # sleep to get to waypoint\
@@ -308,6 +311,84 @@ class StateMachine():
         self.rxarm.sleep()
 
 
+    def execute_event3(self):
+        """!
+        @brief      Go through all waypoints
+        TODO: Implement this function to execute a waypoint plan
+              Make sure you respect estop signal
+        """
+        self.rxarm.enable_torque()
+        if len(self.waypoints) == 0:
+            waypoints = [[-np.pi/2,       -0.5,      -0.3,      0.0,       0.0   ],
+                    [0.75*-np.pi/2,   0.5,       0.3,      0.0,      np.pi/2],
+                    [0.5*-np.pi/2,   -0.5,      -0.3,     np.pi/2,    0.0   ],
+                    [0.25*-np.pi/2,   0.5,       0.3,      0.0,      np.pi/2],
+                    [0.0,             0.0,       0.0,      0.0,       0.0   ],
+                    [0.25*np.pi/2,   -0.5,      -0.3,      0.0,      np.pi/2],
+                    [0.5*np.pi/2,     0.5,       0.3,     np.pi/2,    0.0   ],
+                    [0.75*np.pi/2,   -0.5,      -0.3,      0.0,      np.pi/2],
+                    [np.pi/2,         0.5,       0.3,      0.0,       0.0   ],
+                    [0.0,             0.0,       0.0,      0.0,       0.0   ]]
+
+            for _ in range(len(waypoints)):
+                self.replay_buffer.append(0)
+
+        else:
+            waypoints = self.waypoints
+
+        # send kinematics
+        print('execute_event3...')
+        max_errors = {}
+        # print("Robot waypoints: ", waypoints)
+
+        # TODO : 11/16 Tue : add a 'FLAG' to specify whether we are now closing: 
+        # 1: we are currently CLOSED. when we reach: we want to open
+        # 0: we are currently OPEN. When we reach: we want to close the gripper
+        state = 0 # Initially: OPEN
+        index = 0
+        for wp in waypoints:
+
+            # Note: We should set a 'flag' here for execution.
+            # If it is a 'Teach and Repeat' task: open and close gripper in between
+            # open gripper
+            # self.rxarm.open_gripper()
+            # rospy.sleep(2)
+            self.rxarm.set_positions(wp)
+            rospy.sleep(2)
+            if self.replay_buffer[index] == 0:
+                # just go to this waypoint; nothing required
+                pass
+            elif self.replay_buffer[index] == 1: # open
+                self.rxarm.open_gripper()
+                rospy.sleep(1)
+            else: # close gripper -1
+                self.rxarm.close_gripper()
+                rospy.sleep(1)
+
+            print(wp)
+            # sleep to get to waypoint\
+            # rospy.sleep(3)
+            # print("error: " , list(self.rxarm.get_joint_positions()) - wp )
+            total_errors = []
+            for i in range(len(wp)):
+                diff = abs(self.rxarm.get_joint_positions()[i] - wp[i])
+                total_errors.append(diff)
+            max_errors[self.rxarm.joint_names[np.argmax(total_errors)]] = max(total_errors)
+            # print('errors: ', total_errors)
+
+            # increment index
+            index += 1
+
+        # print("max errors in each waypoint: ", max_errors)
+        # self.status_message = "State: Execute_event3 - Executing motion plan"
+        # self.next_state = "line_em_up"
+        self.waypoints = []
+        # clear replay buffer
+        self.replay_buffer = []
+        self.rxarm.sleep()
+
+
+
     def calibrate(self):
         """!
         @brief      Gets the user input to perform the calibration
@@ -320,6 +401,8 @@ class StateMachine():
 
         pt_world = self.camera.world_apriltag_coords
         pt_camera = np.zeros_like(pt_world)
+
+        # print("Detect " , self.camera.tag_detectionss, " apriltags")
 
         # put apriltag locations (shown in camera frame) into an array
         for i in range(len(pt_world)) :
@@ -496,11 +579,11 @@ class StateMachine():
             z_offset = 0.07 # 7cm
 
             if sqrt(block.wx**2 + block.wy**2) <= 20.00/100:
-                block.wz = 0.00 # 2cm
+                block.wz = 0.00
             elif sqrt(block.wx**2 + block.wy**2) <= 28.00/100:
-                block.wz = 0.01 # 2cm
+                block.wz =0.01 #
             else:
-                block.wz = 0.032 # here
+                block.wz =0.032 
             
             # Pick z offset depends on size
             if block.size == "large":
@@ -573,12 +656,212 @@ class StateMachine():
         print("Done event1")
 
 
-    def pick_n_stack(self):
+
+    def pick_n_sort_stacked(self):
+
 
         self.current_state = "pick_n_sort"
+        self.status_message = "Event1 : Pick n sort"
+
+
+
+        # Level1: R,G,B Large block
+        """
+            1. camera.block_detectors: get a list of blocks
+            2. use a container to store blocks info
+            3. while there's still block in the container: do
+               - set (block.x,y,z, phi, theta=ori, psi) to IK_geometric
+               - add (firts, target, end) waypoints to execute
+               - select a location in the negative half plane ( 3 pre-defined locations)
+               - add (first, destination, end) waypoints
+        """
+        
+        self.rxarm.enable_torque()
+        # Clear all queue
+        self.waypoints = []
+        self.replay_buffer = []
+
+        # First, add a homepose and Open gripper
+        homepose = np.array([0, 0, 0, 0, 0])
+        self.waypoints.append(homepose)
+        self.replay_buffer.append(1)
+
+        Blocks = self.camera.blockDetector()
+        x_offset = 0.1 # 12cm
+        phi = 0.0
+        theta=0.0
+        psi = radians(80)
+
+        dest_poses = [
+            [0.2 + 2*x_offset, -0.05, 0, phi, theta, psi],
+            [0.2 + x_offset,   -0.05, 0, phi, theta, psi],
+            [0.2           ,   -0.05, 0,  phi, theta, psi],
+            [0.2 + 2*x_offset, -0.09, 0, phi, theta, psi],
+            [0.2 + x_offset, -0.09, 0, phi, theta, psi],
+            [0.2, -0.09, 0 ,  phi, theta, psi]
+        ]
+
+        # small destinations
+        z_sm = -0.01 # - 1 cm
+        dest_poses_sm = [
+            [-0.2 - 2*x_offset, -0.005,  z_sm, phi, theta, psi],
+            [-0.2 - x_offset, -0.005, z_sm, phi, theta, psi],
+            [-0.2, -0.005,  z_sm ,  phi, theta, psi],
+            [-0.2 - 2*x_offset, -0.075, z_sm, phi, theta, psi],
+            [-0.2 - x_offset, -0.075,  z_sm, phi, theta, psi],
+            [-0.2, -0.075,  z_sm,  phi, theta, psi]
+        ]
+
+
+        def my_custom_sort(block):
+            custom_order = ['red', 'orange', 'yellow', 'green', 'blue', 'violet']
+            color = block.color
+            if color in custom_order:
+                return custom_order.index(color)
+            else:
+                return len(custom_order)
+
+        # Sort Blocks in R,G,B order
+        # Blocks.sort(key=my_custom_sort)
+        Blocks.sort(key=lambda x: x.wz, reverse=True)
+
+        index_lg = 0 # dest index for large blocks
+        index_sm = 0
+        # Blocks is NOT empty
+        while Blocks:
+
+            # Pop out the first block
+            block = Blocks.pop(0) 
+            print("Doing block ", block.color, " size: ", block.size, " at (", block.wx, block.wy, block.wz, ")", " ori: ", block.ori)
+
+            ### Calculate Pick Location IK
+            # Offset for inter-waypoint 
+            z_offset = 0.07 # 7cm
+
+            if sqrt(block.wx**2 + block.wy**2) <= 20.00/100:
+                block.wz -= 0.025 # -5cm
+            elif sqrt(block.wx**2 + block.wy**2) <= 28.00/100:
+                block.wz -= 0.025 #  down 2.5cm more
+            else:
+                block.wz -= 0.025 # =0.032 
+            
+            # Pick z offset depends on size
+            if block.size == "large":
+                pick_z_offset = -0.015 # -1.5cm
+            else:
+                pick_z_offset = -0.02 # -2cm
+
+            pose = np.array([block.wx, block.wy, block.wz + pick_z_offset, phi, theta, psi])
+            first_pose =  np.array([block.wx, block.wy, block.wz+z_offset, phi, theta, psi])
+            first_elbow_status = self.get_elbow_orientation( np.array([block.wx, block.wy, block.wz+z_offset])) # 0 is up, 1 is down
+            first_wp = self.rxarm.find_best_soluton(IK_geometric(self.rxarm.dh_params, first_pose), first_elbow_status, first_pose[2])
+            block_elbow_status = self.get_elbow_orientation( np.array([block.wx, block.wy, block.wz]))
+            block_wp = self.rxarm.find_best_soluton(IK_geometric(self.rxarm.dh_params, pose), block_elbow_status, pose[2])
+
+            self.waypoints.append(first_wp)
+            self.replay_buffer.append(0) # hold
+            self.waypoints.append(block_wp)
+            self.replay_buffer.append(-1) # close
+            self.waypoints.append(first_wp)
+            self.replay_buffer.append(0) # hold
+
+            ### Calculate Drop Location IK 
+            if block.size == "large":
+                dest_pose = np.asarray(dest_poses[index_lg])
+                dest_first_pose = np.asarray(dest_poses[index_lg])
+                index_lg += 1 # increment index to the next destination
+            else:
+                dest_pose = np.asarray(dest_poses_sm[index_sm])
+                dest_first_pose = np.asarray(dest_poses_sm[index_sm])
+                index_sm += 1
+
+            # dest_z_offset = -0.008 # -0.8 cm
+            if sqrt(dest_pose[0]**2 + dest_pose[1]**2) <= 18.00/100:
+                dest_z_offset = -0.02 # -0.8 cm
+            else:
+                z_offset = 0.08       # interwaypoint offset: 8cm
+                dest_z_offset = +0.02 # +1.0 cm
+
+            dest_pose[2] += dest_z_offset
+            dest_first_pose[2] += z_offset
+
+
+            df_elbow_status = self.get_elbow_orientation( np.array([dest_first_pose[0],dest_first_pose[1],dest_first_pose[2]])) # 0 is up, 1 is down
+            df_wp = self.rxarm.find_best_soluton(IK_geometric(self.rxarm.dh_params, dest_first_pose), df_elbow_status, dest_first_pose[2])
+            dest_elbow_status = self.get_elbow_orientation( np.array([dest_pose[0], dest_pose[1], dest_pose[2]]))
+            dest_wp = self.rxarm.find_best_soluton(IK_geometric(self.rxarm.dh_params, dest_pose), dest_elbow_status, dest_pose[2])
+
+            self.waypoints.append(df_wp)
+            self.replay_buffer.append(0) # hold            
+            self.waypoints.append(dest_wp)
+            self.replay_buffer.append(1) # open            
+            self.waypoints.append(df_wp)
+            self.replay_buffer.append(0) # hold
+            
+
+
+            ########### Execute wps & gripper here ########            
+            index = 0
+            for wp in self.waypoints:
+                self.rxarm.set_positions(wp)
+                rospy.sleep(2)
+                if self.replay_buffer[index] == 0:
+                    # just go to this waypoint; nothing required
+                    pass
+                elif self.replay_buffer[index] == 1: # open
+                    self.rxarm.open_gripper()
+                    rospy.sleep(1.5)
+                else: # close gripper -1
+                    self.rxarm.close_gripper()
+                    rospy.sleep(1.5)
+
+                # increment index
+                index += 1
+            ###############################################
+
+
+            # Clear all queue
+            self.waypoints = [homepose]
+            self.replay_buffer = [1] # Open
+
+            self.rxarm.sleep()
+            rospy.sleep(4)
+            Blocks = self.camera.blockDetector()
+            Blocks.sort(key=lambda x: x.wz, reverse=True)
+
+
+            BlocksLeft = []
+            for j in range(len(Blocks)):
+                print(Blocks[j].color, " y: ", Blocks[j].wy)
+                if Blocks[j].wy <= 0.0:
+                    print("Remove", Blocks[j].color, "y : ", Blocks[j].wy)
+                else:
+                    BlocksLeft.append(Blocks[j])
+            Blocks = BlocksLeft
+
+            print("After removing: number of blocks: ", len(Blocks))
+            print(Blocks)   
+            print("\n\n")                   
+
+
+        for j in range(len(self.waypoints)):
+            print(self.waypoints[j])
+            if self.replay_buffer[j]==0:
+                print("hold")
+            elif self.replay_buffer[j]==1:
+                print("Open")
+            else:
+                print("Close")
+             
+        print("Done event1")
+
+
+    def pick_n_stack(self):
+
+        self.current_state = "pick_n_stack"
         self.next_state = "execute"
 
-        self.status_message = "Event1 : Pick n sort"
+        self.status_message = "Event2 : Pick n stack"
 
 
 
@@ -613,7 +896,7 @@ class StateMachine():
         block_height0 = 0.04
         block_height1 = 0.035
         block_height2 = 0.0275
-        x_offset0 = 0.012
+        x_offset0 = 0.01
         x_offset1 = 0.008
         x_offset2 = 0.0075 # 0.5cm
         z0 = 0.008 # 0.8 cm
@@ -632,14 +915,14 @@ class StateMachine():
         ]
         
         block_height_sm0 = 0.025 # 2.4cm        
-        block_height_sm1 = 0.02 # 2.4cm
+        block_height_sm1 = 0.0185 # 2.4cm
         block_height_sm2 = 0.0185 # 2.4cm
         # small destinations
         z_sm0 =  0.00
         z_sm1 = -0.01
-        z_sm2 = -0.35 # - 1 cm
-        x_offset_sm0 = 0.005
-        x_offset_sm1 = 0.0018
+        z_sm2 = -0.035 # - 1 cm
+        x_offset_sm0 = 0.002 #0.005
+        x_offset_sm1 = 0.004 #0.0018
         x_offset_sm2 = 0.002 # 0.2cm
         # dest_poses_sm = [
         #     [-0.2, -0.005, z_sm, phi, theta, psi],
@@ -650,13 +933,13 @@ class StateMachine():
         dest_poses_sm = [
             [-0.4, -0.005, z_sm0, phi, theta, psi],
             [-0.4-x_offset_sm0, -0.005, z_sm0 + block_height_sm0, phi, theta, psi],
-            [-0.4-2*x_offset_sm0, -0.005, z_sm0+2*block_height_sm0+0.002,  phi, theta, psi],
+            [-0.4-2*x_offset_sm0, -0.005, z_sm0+2*block_height_sm0,  phi, theta, psi],
             [-0.3, -0.005, z_sm1, phi, theta, psi],
             [-0.3-x_offset_sm1, -0.005, z_sm1 + block_height_sm1, phi, theta, psi],
             [-0.3-2*x_offset_sm1, -0.005, z_sm1+2*block_height_sm1,  phi, theta, psi],
-            [-0.18, -0.005, z_sm2, phi, theta, psi],
-            [-0.18-x_offset_sm2, -0.005, z_sm2 + block_height_sm2, phi, theta, psi],
-            [-0.18-2*x_offset_sm2, -0.005, z_sm2+2*block_height_sm2,  phi, theta, psi]
+            [-0.22, -0.005, z_sm2, phi, theta, psi],
+            [-0.22-x_offset_sm2, -0.005, z_sm2 + block_height_sm2, phi, theta, psi],
+            [-0.22-2*x_offset_sm2, -0.005, z_sm2+2*block_height_sm2,  phi, theta, psi]
         ]
 
 
@@ -692,9 +975,12 @@ class StateMachine():
                 if block.size=="large":
                     block.wz = 0.00 # 2cm
                 else:
-                    block.wz = -0.008 # -0.8cm
+                    block.wz = -0.015 # -0.8cm
             elif sqrt(block.wx**2 + block.wy**2) <= 28.00/100:
-                block.wz = 0.01 # 2cm
+                if block.size=="large":
+                    block.wz = 0.01 # 2cm
+                else:
+                    block.wz = 0.00 # -0.8cm
             else:
                 block.wz = 0.032 # here
             
@@ -753,6 +1039,7 @@ class StateMachine():
             
             # Move to the next block:
             i = i+1
+            print('block i = ', i)
             # for wp in self.waypoints:
             #     print(wp)  
                       
@@ -771,31 +1058,395 @@ class StateMachine():
     def line_em_up(self):
 
 
-        reset_joint_config = np.array([-1.67, 0,  0, 0, 0])
+        self.current_state = "line_em_up"
+        self.next_state = "execute"
+
+        self.status_message = "Event3: Line em up"
+
+        reset_joint_config = [0, -np.pi/2,  0, 0, 0]
+
+        # Clear all queue
+        self.waypoints = []
+        self.replay_buffer = []
+
+        # First, add a homepose and Open gripper
+        homepose = np.array([0, 0, 0, 0, 0])
+        self.waypoints.append(homepose)
+        self.replay_buffer.append(1)
+
+        Blocks = self.camera.blockDetector()
+        x_offset = 0.05 # 5cm
+        phi = 0.0
+        theta=0.0
+        psi = radians(80)
+        dest_poses = [
+            [0.2 + 5*x_offset, -0.05, 0, phi, theta, psi],
+            [0.2 + 4*x_offset, -0.05, 0, phi, theta, psi],
+            [0.2 + 3*x_offset, -0.05, 0, phi, theta, psi],
+            [0.2 + 2*x_offset, -0.05, 0, phi, theta, psi],
+            [0.2 + x_offset  , -0.05, 0, phi, theta, psi],
+            [0.2             , -0.05, 0, phi, theta, psi]
+        ]
+
+        # small destinations
+        z_sm = -0.01 # - 1 cm
+        dest_poses_sm = [
+            [-0.2 - 5*x_offset, -0.05,  z_sm, phi, theta, psi],
+            [-0.2 - 4*x_offset, -0.05,  z_sm, phi, theta, psi],
+            [-0.2 - 3*x_offset, -0.05,  z_sm, phi, theta, psi],
+            [-0.2 - 2*x_offset, -0.05,  z_sm, phi, theta, psi],
+            [-0.2 - x_offset  , -0.05,  z_sm, phi, theta, psi],
+            [-0.2             , -0.05,  z_sm, phi, theta, psi]
+        ]
+
+
+        def my_custom_sort(block):
+            custom_order = ['red', 'orange', 'yellow', 'green', 'blue', 'violet']
+            color = block.color
+            if color in custom_order:
+                return custom_order.index(color)
+            else:
+                return len(custom_order)
+
+
+            
 
         # After placing each block, set_joint_position(reset_joint_config)
         # and run blockDetector again
-
+        Blocks = []
         Blocks = self.camera.blockDetector()
+        Blocks.sort(key=my_custom_sort)
+
+
+        index_lg = 0 # dest index for large blocks
+        index_sm = 0
 
         while Blocks:
+            self.waypoints = []
+            ## Remove blocks in the negative half plane
+            BlocksLeft = []
+            for block in Blocks:
+                if block.wy >= 0.0:
+                    BlocksLeft.append(block)
+            BlocksLeft.sort(key=my_custom_sort)
 
+            ######## Pick and Place (in one line) #######
+
+            Blocks = BlocksLeft
+            # Pop out the first block
+            block = Blocks.pop(0) 
+            print("Doing block ", block.color, " size: ", block.size, " at (", block.wx, block.wy, block.wz, ")", " ori: ", block.ori)
+
+            ### Calculate Pick Location IK
+            # Offset for inter-waypoint 
+            z_offset = 0.07 # 7cm
+            if sqrt(block.wx**2 + block.wy**2) <= 20.00/100:
+                block.wz = 0.00 # 2cm
+            elif sqrt(block.wx**2 + block.wy**2) <= 28.00/100:
+                block.wz = 0.01 # 2cm
+            else:
+                block.wz = 0.032 # here
+            # Pick z offset depends on size
+            if block.size == "large":
+                pick_z_offset = -0.015 # -1.5cm
+            else:
+                pick_z_offset = -0.02 # -2cm
+            pose = np.array([block.wx, block.wy, block.wz + pick_z_offset, phi, theta, psi])
+            first_pose =  np.array([block.wx, block.wy, block.wz+z_offset, phi, theta, psi])
+            first_elbow_status = self.get_elbow_orientation( np.array([block.wx, block.wy, block.wz+z_offset])) # 0 is up, 1 is down
+            first_wp = self.rxarm.find_best_soluton(IK_geometric(self.rxarm.dh_params, first_pose), first_elbow_status, first_pose[2])
+            block_elbow_status = self.get_elbow_orientation( np.array([block.wx, block.wy, block.wz]))
+            block_wp = self.rxarm.find_best_soluton(IK_geometric(self.rxarm.dh_params, pose), block_elbow_status, pose[2])
+
+            self.waypoints.append(first_wp)
+            self.replay_buffer.append(0) # hold
+            self.waypoints.append(block_wp)
+            self.replay_buffer.append(-1) # close
+            self.waypoints.append(first_wp)
+            self.replay_buffer.append(0) # hold
+
+            ### Calculate Drop Location IK 
+            if block.size == "large":
+                dest_pose = np.asarray(dest_poses[index_lg])
+                dest_first_pose = np.asarray(dest_poses[index_lg])
+                index_lg += 1 # increment index to the next destination
+            else:
+                dest_pose = np.asarray(dest_poses_sm[index_sm])
+                dest_first_pose = np.asarray(dest_poses_sm[index_sm])
+                index_sm += 1
+
+            # dest_z_offset = -0.008 # -0.8 cm
+            if sqrt(dest_pose[0]**2 + dest_pose[1]**2) <= 18.00/100:
+                dest_z_offset = -0.02 # -0.8 cm
+            else:
+                z_offset = 0.08       # interwaypoint offset: 8cm
+                dest_z_offset = +0.02 # +1.0 cm
+
+            dest_pose[2] += dest_z_offset
+            dest_first_pose[2] += z_offset
+
+            df_elbow_status = self.get_elbow_orientation( np.array([dest_first_pose[0],dest_first_pose[1],dest_first_pose[2]])) # 0 is up, 1 is down
+            df_wp = self.rxarm.find_best_soluton(IK_geometric(self.rxarm.dh_params, dest_first_pose), df_elbow_status, dest_first_pose[2])
+            dest_elbow_status = self.get_elbow_orientation( np.array([dest_pose[0], dest_pose[1], dest_pose[2]]))
+            dest_wp = self.rxarm.find_best_soluton(IK_geometric(self.rxarm.dh_params, dest_pose), dest_elbow_status, dest_pose[2])
+
+            self.waypoints.append(df_wp)
+            self.replay_buffer.append(0) # hold            
+            self.waypoints.append(dest_wp)
+            self.replay_buffer.append(1) # open            
+            self.waypoints.append(df_wp)
+            self.replay_buffer.append(0) # hold
+
+            ###########################################
+
+            ###### Execute arm ##########
+            
 
             # After placing:
+            self.execute_event3()
             self.rxarm.set_positions(reset_joint_config)
+            rospy.sleep(2)
             Blocks = self.camera.blockDetector()
+            for block in Blocks:
+                if block.wy <= 0.0:
+                    Blocks.remove(block)
 
 
-            pass
+        print("Done event 3")
 
-
-        pass
-
+    ## TODO : set 'destination' be the block with wy <= 0! Since only one stack
     def stack_em_high(self):
 
-        pass
+        self.current_state = "stack_em_high"
 
-    
+        self.status_message = "Event4 : stack_em_high"
+
+        # Level1: R,G,B Large block
+        """
+            1. camera.block_detectors: get a list of blocks
+            2. use a container to store blocks info
+            3. while there's still block in the container: do
+               - set (block.x,y,z, phi, theta=ori, psi) to IK_geometric
+               - add (firts, target, end) waypoints to execute
+               - select a location in the negative half plane ( 3 pre-defined locations)
+               - add (first, destination, end) waypoints
+        """
+        
+        # Clear all queue
+        self.waypoints = []
+        self.replay_buffer = []
+
+        # self.rxarm.disable_torque()
+        self.rxarm.enable_torque()
+        homepose = np.array([0, 0, 0, 0, 0])
+
+        """
+        ############################################################
+        print("Start sweeping......")
+        self.rxarm.set_positions(homepose)
+        rospy.sleep(1.5)
+        # Sweep once to unstack all blocks
+        sweep_wps = [
+            [94,  0,  0,  0,   0],
+            [94, 86.6, 88, 83, 1.4],
+            [47, 86.6, 90, 83, 6.5],
+            [-2, 86.6, 85, 86, 6.33],
+            [-37, 86.6, 88, 86, 6.4],
+            [-90, 86.6, 94, 86, 6.06],
+            [-37, 86.6, 88, 86, 6.4]
+        ]
+        # leftmost_config = [91, 25, -48, 60, 3.8]
+        # rightmost_config = [-91, 25, -48, 60, 3.8]
+        for wp in sweep_wps:
+            for i in range(len(wp)):
+                wp[i] = radians(wp[i])
+                # leftmost_config[i] = radians(leftmost_config[i])
+                # rightmost_config[i] = radians(rightmost_config[i])
+            self.rxarm.set_positions(wp)
+            rospy.sleep(2.5)
+        self.rxarm.sleep()
+        rospy.sleep(3)
+        print("Complete sweeping")
+        ############################################################
+        """
+        
+        # First, add a homepose and Open gripper
+        self.waypoints.append(homepose)
+        self.replay_buffer.append(1)
+
+        Blocks = self.camera.blockDetector()
+        # x_offset = 0.1 # 12cm
+        phi = 0.0
+        theta=0.0
+        psi = radians(80)
+
+        # block_height = 0.0375
+        # block_height_sm = 0.024 # 2.4cm
+        block_height2 = 0.031
+        x_offset2 = 0.0075 # 0.5cm
+        z2 = -0.03
+        dest_poses = [
+            [0.2, -0.005,               z2, phi, theta, psi],
+            [0.2  +x_offset2, -0.005,   z2 + block_height2, phi, theta, psi],
+            [0.2  +2*x_offset2, -0.005, z2 +2*block_height2,  phi, theta, psi],
+            [0.2  +3*x_offset2, -0.005, z2 +3*block_height2, phi, theta, psi],
+            [0.2  +4*x_offset2, -0.005, z2 +4*block_height2, phi, theta, psi],
+            [0.2  +5*x_offset2, -0.005, z2 +5*block_height2,  phi, theta, psi],
+            [0.2  +6*x_offset2, -0.005, z2 +6*block_height2, phi, theta, psi],
+            [0.2  +7*x_offset2, -0.005, z2 +7*block_height2,  phi, theta, psi]
+
+        ]
+        
+        block_height_sm2 = 0.0185 # 2.4cm
+        z_sm2 = -0.035 # - 1 cm
+        x_offset_sm2 = 0.004 # 0.2cm
+        dest_poses_sm = [
+            [-0.22, -0.005, z_sm2, phi, theta, psi],
+            [-0.22  -x_offset_sm2, -0.005, z_sm2 + block_height_sm2, phi, theta, psi],
+            [-0.22  -2*x_offset_sm2, -0.005, z_sm2 +2*block_height_sm2,  phi, theta, psi],
+            [-0.22  -3*x_offset_sm2, -0.005, z_sm2 +3*block_height_sm2, phi, theta, psi],
+            [-0.22  -4*x_offset_sm2, -0.005, z_sm2 + 4*block_height_sm2, phi, theta, psi],
+            [-0.22  -5*x_offset_sm2, -0.005, z_sm2 + 5*block_height_sm2,  phi, theta, psi],
+            [-0.22  -6*x_offset_sm2, -0.005, z_sm2 + 6*block_height_sm2, phi, theta, psi],
+            [-0.22  -7*x_offset_sm2, -0.005, z_sm2 + 7*block_height_sm2,  phi, theta, psi]
+        ]
+
+
+        def my_custom_sort(block):
+            custom_order = ['red', 'orange', 'yellow', 'green', 'blue', 'violet']
+            color = block.color
+            if color in custom_order:
+                return custom_order.index(color)
+            else:
+                return len(custom_order)
+
+        # Sort Blocks in R,G,B order
+        Blocks.sort(key=my_custom_sort)
+
+        i = 0
+        index_lg = 0 # dest index for large blocks
+        index_sm = 0
+        # Blocks is NOT empty
+        while Blocks:
+            # Pop out the first block
+            block = Blocks.pop(0) 
+            print("Doing block ", block.color, " size: ", block.size, " at (", block.wx, block.wy, block.wz, ")", " ori: ", block.ori)
+
+            ### Calculate Pick Location IK
+            # pose = np.array([block.wx, block.wy, block.wz, phi, block.ori, psi])
+
+            # Offset for inter-waypoint 
+            z_offset = 0.07 # 7cm
+
+            if sqrt(block.wx**2 + block.wy**2) <= 20.00/100:
+                if block.size=="large":
+                    block.wz = 0.00 # 2cm
+                else:
+                    block.wz = -0.015 # -0.8cm
+            elif sqrt(block.wx**2 + block.wy**2) <= 28.00/100:
+                if block.size=="large":
+                    block.wz = 0.01 # 2cm
+                else:
+                    block.wz = 0.00 # -0.8cm
+            else:
+                block.wz = 0.032 # here
+            
+            # Pick z offset depends on size
+            if block.size == "large":
+                pick_z_offset = -0.015 # -1.5cm
+            else:
+                pick_z_offset = -0.02 # -2cm
+
+
+            # If the block is too far, ignore it
+            if sqrt(block.wx**2 + block.wy**2) >= 40.00/100:
+                continue # Skip this block
+
+            pose = np.array([block.wx, block.wy, block.wz + pick_z_offset, phi, theta, psi])
+            first_pose =  np.array([block.wx, block.wy, block.wz+z_offset, phi, theta, psi])
+            first_elbow_status = self.get_elbow_orientation( np.array([block.wx, block.wy, block.wz+z_offset])) # 0 is up, 1 is down
+            first_wp = self.rxarm.find_best_soluton(IK_geometric(self.rxarm.dh_params, first_pose), first_elbow_status, first_pose[2])
+            block_elbow_status = self.get_elbow_orientation( np.array([block.wx, block.wy, block.wz]))
+            block_wp = self.rxarm.find_best_soluton(IK_geometric(self.rxarm.dh_params, pose), block_elbow_status, pose[2])
+
+            self.waypoints.append(first_wp)
+            self.replay_buffer.append(0) # hold
+            self.waypoints.append(block_wp)
+            self.replay_buffer.append(-1) # close
+            self.waypoints.append(first_wp)
+            self.replay_buffer.append(0) # hold
+
+            ### Calculate Drop Location IK 
+            if block.size == "large":
+                dest_pose = np.asarray(dest_poses[index_lg])
+                dest_first_pose = np.asarray(dest_poses[index_lg])
+                index_lg += 1 # increment index to the next destination
+            else:
+                dest_pose = np.asarray(dest_poses_sm[index_sm])
+                dest_first_pose = np.asarray(dest_poses_sm[index_sm])
+                index_sm += 1
+
+            # dest_z_offset = -0.008 # -0.8 cm
+            if sqrt(dest_pose[0]**2 + dest_pose[1]**2) <= 18.00/100:
+                dest_z_offset = -0.02 # -0.8 cm
+            else:
+                z_offset = 0.08       # interwaypoint offset: 8cm
+                dest_z_offset = +0.02 # +1.0 cm
+
+            dest_pose[2] += dest_z_offset
+            dest_first_pose[2] += z_offset
+
+
+            df_elbow_status = self.get_elbow_orientation( np.array([dest_first_pose[0],dest_first_pose[1],dest_first_pose[2]])) # 0 is up, 1 is down
+            df_wp = self.rxarm.find_best_soluton(IK_geometric(self.rxarm.dh_params, dest_first_pose), df_elbow_status, dest_first_pose[2])
+            dest_elbow_status = self.get_elbow_orientation( np.array([dest_pose[0], dest_pose[1], dest_pose[2]]))
+            dest_wp = self.rxarm.find_best_soluton(IK_geometric(self.rxarm.dh_params, dest_pose), dest_elbow_status, dest_pose[2])
+
+            self.waypoints.append(df_wp)
+            self.replay_buffer.append(0) # hold            
+            self.waypoints.append(dest_wp)
+            self.replay_buffer.append(1) # open            
+            self.waypoints.append(df_wp)
+            self.replay_buffer.append(0) # hold
+            
+            # # Move to the next block:
+            # i = i+1
+ 
+            ### Execute wps & gripper here $####            
+            index = 0
+            for wp in self.waypoints:
+
+                self.rxarm.set_positions(wp)
+                rospy.sleep(2)
+                if self.replay_buffer[index] == 0:
+                    # just go to this waypoint; nothing required
+                    pass
+                elif self.replay_buffer[index] == 1: # open
+                    self.rxarm.open_gripper()
+                    rospy.sleep(1.5)
+                else: # close gripper -1
+                    self.rxarm.close_gripper()
+                    rospy.sleep(1.5)
+
+                # increment index
+                index += 1
+
+            # Clear all queue
+            self.waypoints = [homepose]
+            self.replay_buffer = [1] # Open
+
+            self.rxarm.sleep()
+            rospy.sleep(4)
+            Blocks = self.camera.blockDetector()
+            Blocks.sort(key=my_custom_sort)
+            for block in Blocks:
+                if block.wy <= 0.0:
+                    Blocks.remove(block)
+         
+        print("Done event4")
+
+        self.next_state = "execute"
+        print("set next_state to execute")    
 
 
 class StateMachineThread(QThread):

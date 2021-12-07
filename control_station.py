@@ -125,6 +125,11 @@ class Gui(QMainWindow):
         self.ui.btnUser14.setText('Stack em high')
         self.ui.btnUser14.clicked.connect(partial(lambda: self.sm.stack_em_high()))
 
+        # Pick n sort stacked
+        self.ui.btnUser15.setText('pick_n_sort_stacked')
+        self.ui.btnUser15.clicked.connect(partial(lambda: self.sm.pick_n_sort_stacked()))
+
+
 
 
         # Sliders

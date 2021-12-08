@@ -350,7 +350,7 @@ def pose_ik_elbow_down(pose, orientation, dh_params):
     # print("oc: ", x_c, y_c, z_c)
 
     pitch = psi
-    theta = 0
+    # theta = 0
     phi = 0
 
     ## Use 2D planar IK solution to find other joints
@@ -398,7 +398,7 @@ def pose_ik_elbow_down(pose, orientation, dh_params):
     ## Easy way to find theta4 & theta5
     theta_4 = theta1 - theta2 - pitch
     theta_4 = clamp(theta_4)
-    theta_5 = 0 
+    theta_5 = theta
     theta_4_negative = -theta_4
     theta_4_negative = clamp(theta_4_negative)
 
@@ -460,7 +460,7 @@ def pose_ik_elbow_up(pose, orientation, dh_params):
 
     ## Use 2D planar IK solution to find other joints
     pitch = psi
-    theta = 0
+    # theta = 0
     phi = 0
 
     # Find theta 0 (slide 20)
@@ -504,7 +504,7 @@ def pose_ik_elbow_up(pose, orientation, dh_params):
     # Wrist Angle = Shoulder - Elbow - Pitch
     theta_4 = theta1 - theta2 - pitch
     theta_4 = clamp(theta_4)
-    theta_5 = 0 
+    theta_5 = theta
     theta_4_negative = -theta_4
     theta_4_negative = clamp(theta_4_negative)
 
@@ -548,12 +548,38 @@ def IK_geometric(dh_params, pose):
 
     x, y, z, phi, theta, psi = pose
     
+
+    if sqrt(x**2 + y**2) <= 15.00/100:
+        z -= 0.02
+    elif sqrt(x**2 + y**2) <= 20.00/100:
+        z -= 0.02
+    elif sqrt(x**2 + y**2) <= 25.00/100:
+        z -= 0.03
+    else:
+        z -= 0.01
+
     # offset for (x, y)
-    constant_offset = 7.00/100 # 3cm
+    # 7.00
+    # 8.00 worked
+    constant_offset = 9.00/100 # 3cm
     # print("Before offset (x,y) ", x, y)
     base_angle = atan2(abs(x), abs(y))
     dx = constant_offset*sin(base_angle) 
     dy = constant_offset*cos(base_angle)
+
+
+    ########### TODO : determine Radius (measured from world (0, 0, 0) ##########
+    # if sqrt(x**2 + y**2) <= 15.00/100:
+    #     z -= 0.07
+    # elif sqrt(x**2 + y**2) <= 20.00/100:
+    #     z -= 0.05
+    # elif sqrt(x**2 + y**2) <= 25.00/100:
+    #     z -= 0.025
+    # else:
+    #     z -= 0.015
+
+
+
     if x <= 0.0:
         x = x + dx
     else:

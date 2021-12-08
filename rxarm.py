@@ -322,7 +322,9 @@ class RXArm(InterbotixRobot):
             # if z > 1cm and |x| > 45 cm
             x, y, z, phi, theta, psi = ee_pos
             # print("x, z: ", x, z)
-            if z > 0.00/100 and x<= 45.00/100 and x >= -45.00/100 and solution[3]<=radians(0):
+            if x<= 45.00/100 and x >= -45.00/100 and solution[3]<=radians(0):
+     
+            # if z > 0.00/100 and x<= 45.00/100 and x >= -45.00/100 and solution[3]<=radians(0):
                 return solution
                 # if elbow_status==0: # elbow up, discard theta3>0 solution
                 #     if solution[3] <= 0:

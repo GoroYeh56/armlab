@@ -541,43 +541,50 @@ def IK_geometric(dh_params, pose):
     """
     
     joint_configs = np.zeros(shape=(4,5)) # 4x5
+    x, y, z, phi, theta, psi = pose    
 
+    no_sol_config = np.array([
+        [[0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0] ],
+        [[0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0] ]
+    ])
 
-    # 
+    # if sqrt(x**2 + y**2 + z**2) >= 40.00 /100:
+        # return no_sol_config
 
-
-    x, y, z, phi, theta, psi = pose
-    
-
+    ########### TODO : determine Radius (measured from world (0, 0, 0) ##########
     if sqrt(x**2 + y**2) <= 15.00/100:
-        z -= 0.02
+        z -= 0.065
     elif sqrt(x**2 + y**2) <= 20.00/100:
-        z -= 0.02
-    elif sqrt(x**2 + y**2) <= 25.00/100:
         z -= 0.03
+    elif sqrt(x**2 + y**2) <= 25.00/100:
+        z -= 0.015
     else:
-        z -= 0.01
+        z -= 0.005
+
+    # if sqrt(x**2 + y**2) <= 15.00/100:
+    #     z -= 0.02
+    # elif sqrt(x**2 + y**2) <= 20.00/100:
+    #     z -= 0.01
+    # elif sqrt(x**2 + y**2) <= 25.00/100:
+    #     z -= 0.01
+    # else:
+    #     z -= 0.01
 
     # offset for (x, y)
     # 7.00
     # 8.00 worked
-    constant_offset = 9.00/100 # 3cm
+    if z >= 0.15:
+        constant_offset = 9.00/100 # 3cm
+    elif z>= 0.11:
+        constant_offset = 8.00/100
+    else:
+        constant_offset = 7.00/100
     # print("Before offset (x,y) ", x, y)
     base_angle = atan2(abs(x), abs(y))
     dx = constant_offset*sin(base_angle) 
     dy = constant_offset*cos(base_angle)
-
-
-    ########### TODO : determine Radius (measured from world (0, 0, 0) ##########
-    # if sqrt(x**2 + y**2) <= 15.00/100:
-    #     z -= 0.07
-    # elif sqrt(x**2 + y**2) <= 20.00/100:
-    #     z -= 0.05
-    # elif sqrt(x**2 + y**2) <= 25.00/100:
-    #     z -= 0.025
-    # else:
-    #     z -= 0.015
-
 
 
     if x <= 0.0:
@@ -610,3 +617,15 @@ def IK_geometric(dh_params, pose):
     joint_configs = np.stack((el_up, el_down))
 
     return joint_configs
+
+
+
+
+
+    ################ Below : NOT Used ##############
+    # If z > 13 cm: set pitch to be 10 deg
+    # if z >= 7.00/100:
+    #     psi = radians(0)
+    #     theta = 0
+    # else:
+    #     pass

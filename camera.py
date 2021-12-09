@@ -302,6 +302,10 @@ class Camera():
             else:
                 block_size = "large"
 
+            if block_dim[0] >= 50 or block_dim[0] >= 50 or block_dim[0]<=10 or block_dim[1]<=10:
+                continue # too large or too small, don't append. It's outlier
+
+
             M = cv2.moments(contour)
             # division by zero if NOT found blocks
             if M['m00']==0:
@@ -413,7 +417,7 @@ class Camera():
         thresh = cv2.bitwise_and(cv2.inRange(depth_data, lower, upper), mask)
         # cv2.imshow("Threshold window", thresh)
 
-        kernel = np.ones((22,22), np.uint8)
+        kernel = np.ones((2,2), np.uint8)
         closing = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
         # cv2.imshow("Closing ", closing)
         # closing = thresh

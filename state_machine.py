@@ -996,8 +996,6 @@ class StateMachine():
         print("Done event 1")
         self.next_state = "execute"
 
-
-
     def pick_n_sort_stacked(self):
 
 
@@ -1201,12 +1199,7 @@ class StateMachine():
     def pick_n_stack(self):
 
         self.current_state = "pick_n_stack"
-        self.next_state = "execute"
-
         self.status_message = "Event2 : Pick n stack"
-
-
-
         # Level1: R,G,B Large block
         """
             1. camera.block_detectors: get a list of blocks
@@ -1266,11 +1259,7 @@ class StateMachine():
         x_offset_sm0 = 0.002 #0.005
         x_offset_sm1 = 0.004 #0.0018
         x_offset_sm2 = 0.002 # 0.2cm
-        # dest_poses_sm = [
-        #     [-0.2, -0.005, z_sm, phi, theta, psi],
-        #     [-0.2-x_offset_sm, -0.005, z_sm + block_height_sm, phi, theta, psi],
-        #     [-0.2-2*x_offset_sm, -0.005, z_sm+2*block_height_sm,  phi, theta, psi]
-        # ]
+
         # level3:
         dest_poses_sm = [
             [-0.4, -0.005, z_sm0, phi, theta, psi],
@@ -1283,8 +1272,6 @@ class StateMachine():
             [-0.22-x_offset_sm2, -0.005, z_sm2 + block_height_sm2, phi, theta, psi],
             [-0.22-2*x_offset_sm2, -0.005, z_sm2+2*block_height_sm2,  phi, theta, psi]
         ]
-
-
 
         def my_custom_sort(block):
             custom_order = ['red', 'orange', 'yellow', 'green', 'blue', 'violet']
@@ -1308,8 +1295,6 @@ class StateMachine():
             print("Doing block ", block.color, " size: ", block.size, " at (", block.wx, block.wy, block.wz, ")", " ori: ", block.ori)
 
             ### Calculate Pick Location IK
-            # pose = np.array([block.wx, block.wy, block.wz, phi, block.ori, psi])
-
             # Offset for inter-waypoint 
             z_offset = 0.07 # 7cm
 
@@ -1382,21 +1367,20 @@ class StateMachine():
             
             # Move to the next block:
             i = i+1
-            print('block i = ', i)
-            # for wp in self.waypoints:
-            #     print(wp)  
+            # print('block i = ', i)  
                       
-
-        for j in range(len(self.waypoints)):
-            print(self.waypoints[j])
-            if self.replay_buffer[j]==0:
-                print("hold")
-            elif self.replay_buffer[j]==1:
-                print("Open")
-            else:
-                print("Close")
+        # for j in range(len(self.waypoints)):
+        #     print(self.waypoints[j])
+        #     if self.replay_buffer[j]==0:
+        #         print("hold")
+        #     elif self.replay_buffer[j]==1:
+        #         print("Open")
+        #     else:
+        #         print("Close")
              
         print("Done event2")
+        self.next_state = "execute"
+
 
     def line_em_up(self):
 

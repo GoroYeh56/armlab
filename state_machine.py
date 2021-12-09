@@ -1195,7 +1195,6 @@ class StateMachine():
              
         print("Done event1")
 
-
     def pick_n_stack(self):
 
         self.current_state = "pick_n_stack"
@@ -1574,9 +1573,9 @@ class StateMachine():
                     self.rxarm.set_positions(up_drop_wp)
                     rospy.sleep(2)
                     ###############################################
-                print("Sleep arm and check lower level:")
-                self.rxarm.sleep()
-                rospy.sleep(2)
+            print("Sleep arm and check lower level:")
+            self.rxarm.sleep()
+            rospy.sleep(2)
         # return
         print("Done unsatcking")
         ###################################################
@@ -1589,17 +1588,17 @@ class StateMachine():
         self.replay_buffer.append(1)
 
         ########## Then, Line em up to the neg have plane ######
-        x_offset = 0.05 # 5cm
+        x_offset = 0.05 # 5 cm
         phi = 0.0
         theta=0.0
         psi = radians(80)
         dest_poses = [
-            [0.15 + 5*x_offset, -0.1, 0, phi, theta, psi],
-            [0.15 + 4*x_offset, -0.1, 0, phi, theta, psi],
-            [0.15 + 3*x_offset, -0.1, 0, phi, theta, psi],
-            [0.15 + 2*x_offset, -0.1, 0, phi, theta, psi],
-            [0.15 + x_offset  , -0.1, 0, phi, theta, psi],
-            [0.15             , -0.1, 0, phi, theta, psi]
+            [0.4  - 0*x_offset, -0.1, 0, phi, theta, psi],
+            [0.4  - 1*x_offset, -0.1, 0, phi, theta, psi],
+            [0.4  - 2*x_offset, -0.1, 0, phi, theta, psi],
+            [0.4  - 3*x_offset, -0.1, 0, phi, theta, psi],
+            [0.4  - 4*x_offset-0.01  , -0.1, 0, phi, theta, psi],
+            [0.175             , -0.1, 0, phi, theta, psi]
             # [0.15             , -0.1, 0, phi, theta, psi]
         ]
         # small destinations
@@ -1674,9 +1673,9 @@ class StateMachine():
 
             # dest_z_offset = -0.008 # -0.8 cm
             if sqrt(dest_pose[0]**2 + dest_pose[1]**2) <= 18.00/100:
-                dest_z_offset = -0.045 # -0.8 cm
-            elif sqrt(dest_pose[0]**2 + dest_pose[1]**2) <= 23.00/100:
                 dest_z_offset = -0.02 # -0.8 cm
+            elif sqrt(dest_pose[0]**2 + dest_pose[1]**2) <= 23.00/100:
+                dest_z_offset = -0.01 # -0.8 cm
             else:
                 z_offset = 0.08       # interwaypoint offset: 8cm
                 dest_z_offset = +0.02 # +1.0 cm
@@ -1684,6 +1683,9 @@ class StateMachine():
 
             dest_pose[2] += dest_z_offset
             dest_first_pose[2] += z_offset
+
+            # dest_joint wrist rotation:
+            dest_pose[4] = 0 + (np.pi/2 - atan2(dest_pose[0], dest_pose[1]))
 
             df_elbow_status = self.get_elbow_orientation( np.array([dest_first_pose[0],dest_first_pose[1],dest_first_pose[2]])) # 0 is up, 1 is down
             df_wp = self.rxarm.find_best_soluton(IK_geometric(self.rxarm.dh_params, dest_first_pose), df_elbow_status, dest_first_pose[2])
@@ -2021,6 +2023,9 @@ class StateMachine():
         print("Done event 4")
         self.next_state = "execute"
 
+
+    def bonus_tothesky(self):
+        pass
 
 
 

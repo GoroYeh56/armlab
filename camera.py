@@ -247,9 +247,9 @@ class Camera():
         mask = np.zeros_like(self.DepthFrameRaw, dtype=np.uint8)
 
         cv2.rectangle(mask, (180,85),(1020,680), 255, cv2.FILLED)
-        cv2.rectangle(mask, (502,79),(685,403), 0, cv2.FILLED)
+        cv2.rectangle(mask, (510,79),(680,390), 0, cv2.FILLED)
         cv2.rectangle(cnt_image, (180,85),(1020,680), (255, 0, 0), 2)
-        cv2.rectangle(cnt_image, (502,79),(685,403), (255, 0, 0), 2)
+        cv2.rectangle(cnt_image, (510,79),(680,390), (255, 0, 0), 2)
         # cv2.imshow("mask", mask)
 
         # threshold for depth:  thresh[i][j] = 1 if depth_data[i][j] within [lower, upper]

@@ -390,7 +390,7 @@ class RXArmThread(QThread):
         self.rxarm = rxarm
         # define PID values
         waist_PID = [640, 0, 3600]
-        shoulder_PID = [700, 100, 0]
+        shoulder_PID = [700, 0, 0]
         elbow_PID = [700, 80, 0]
         wrist_angle_PID = [800, 0, 0]
         wrist_rotate_PID = [640, 0, 3600]

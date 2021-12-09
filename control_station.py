@@ -129,6 +129,10 @@ class Gui(QMainWindow):
         self.ui.btnUser15.setText('pick_n_sort_stacked')
         self.ui.btnUser15.clicked.connect(partial(lambda: self.sm.pick_n_sort_stacked()))
 
+        # Pick n sort stacked
+        self.ui.btnUser16.setText('Bonus Event')
+        self.ui.btnUser16.clicked.connect(partial(lambda: self.sm.bonus_tothesky()))
+
 
 
 

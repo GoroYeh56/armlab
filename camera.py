@@ -302,8 +302,8 @@ class Camera():
             else:
                 block_size = "large"
 
-            if block_dim[0] >= 50 or block_dim[0] >= 50 or block_dim[0]<=10 or block_dim[1]<=10:
-                continue # too large or too small, don't append. It's outlier
+            # if block_dim[0] >= 50 or block_dim[0] >= 50 or block_dim[0]<=10 or block_dim[1]<=10:
+            #     continue # too large or too small, don't append. It's outlier
 
 
             M = cv2.moments(contour)

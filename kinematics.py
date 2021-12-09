@@ -305,6 +305,16 @@ def wrap_to_pi(angle):
             
     return angle
 
+
+def clamp_to_one(val):
+    if val >= 1.0:
+        return 1.0
+    elif val <= -1.0:
+        return -1.0
+    else:
+        return val
+
+
 def pose_ik_elbow_down(pose, orientation, dh_params):
     x,y,z = pose
     phi, theta, psi = orientation
@@ -367,7 +377,7 @@ def pose_ik_elbow_down(pose, orientation, dh_params):
     # theta1 = atan2(200,50) + alpha - atan2(z_c, sqrt(x_c**2 + y_c**2))
     # theta1 = clamp(theta1)
 
-    theta2 = acos((-l2**2 - l1**2 + x_c**2 + y_c**2 + z_c**2) / (-2*l1*l2)) - atan2(200,50)# in radians
+    theta2 = acos(clamp_to_one((-l2**2 - l1**2 + x_c**2 + y_c**2 + z_c**2) / (-2*l1*l2))) - atan2(200,50)# in radians
     theta2 = clamp(theta2)
     alpha = atan2(l2*sin(theta2 - atan2(200, 50)), l1 + l2*cos(theta2 - atan2(200,50)))
     theta1 = atan2(200 , 50) + alpha - atan2(z_c, sqrt(x_c**2 + y_c**2))
@@ -474,7 +484,7 @@ def pose_ik_elbow_up(pose, orientation, dh_params):
     # print('elobw_up debug cos = ', (l2**2 + l1**2 - x_c**2 - y_c**2 - z_c**2) / (2*l1*l2) )
     # theta2 = radians(256) - acos((l2**2 + l1**2 - x_c**2 - y_c**2 - z_c**2) / (2*l1*l2)) # in radians
     # theta2 = clamp(theta2)
-    theta2 = acos((-l2**2 - l1**2 + x_c**2 + y_c**2 + z_c**2) / (-2*l1*l2)) - atan2(200,50)# in radians
+    theta2 = acos(clamp_to_one((-l2**2 - l1**2 + x_c**2 + y_c**2 + z_c**2) / (-2*l1*l2))) - atan2(200,50)# in radians
     theta2 = clamp(theta2)
     alpha = atan2(l2*sin(theta2 - atan2(200, 50)), l1 + l2*cos(theta2 - atan2(200,50)))
     theta1 = atan2(200 , 50) + alpha - atan2(z_c, sqrt(x_c**2 + y_c**2))
@@ -552,6 +562,11 @@ def IK_geometric(dh_params, pose):
 
     # if sqrt(x**2 + y**2 + z**2) >= 40.00 /100:
         # return no_sol_config
+
+
+    # If sqrt >= 41cm : psi = 60
+    if sqrt(x**2 + y**2 + z**2) >= 45.00/100:
+        psi = radians(55)
 
     ########### TODO : determine Radius (measured from world (0, 0, 0) ##########
     if sqrt(x**2 + y**2) <= 15.00/100:

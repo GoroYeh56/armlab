@@ -575,12 +575,18 @@ def IK_geometric(dh_params, pose):
     # offset for (x, y)
     # 7.00
     # 8.00 worked
-    if z >= 0.15:
+    if z >= 0.12:
         constant_offset = 9.00/100 # 3cm
-    elif z>= 0.11:
+        z -= 0.015
+    elif z>= 0.9:
         constant_offset = 8.00/100
+        z -= 0.015
+    elif z>= 0.04:
+        constant_offset = 7.00/100
+        z -= 0.015
     else:
         constant_offset = 7.00/100
+        
     # print("Before offset (x,y) ", x, y)
     base_angle = atan2(abs(x), abs(y))
     dx = constant_offset*sin(base_angle) 

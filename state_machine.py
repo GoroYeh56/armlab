@@ -1822,7 +1822,9 @@ class StateMachine():
             Blocks = self.camera.blockDetector_givenheight(centers[i], widths[i])
             print("Unstacking level " +str(4-i))
             print("Detect "+str(len(Blocks))+ " blocks")
-
+            if not Blocks:
+                print("Empty block. Jump to lower level")
+                continue
             while Blocks:
                 block = Blocks.pop(0)
                 if block.wz <= heights[i]/100 : # convert to meter
@@ -1842,6 +1844,8 @@ class StateMachine():
                     
                     # if abs(block.ori - np.pi/2) <= radians(10):
                         # block.wx -= 0.01 # x-1cm
+                    if block.wz >= 0.04:
+                        block.wz -= 0.01
 
                     block_position = np.array([block.wx, block.wy, block.wz + z_offset])
                     block_elbow_status = self.get_elbow_orientation(block_position)
@@ -1850,8 +1854,8 @@ class StateMachine():
                     up_wp =  self.rxarm.find_best_soluton(IK_geometric(self.rxarm.dh_params, up_pose), block_elbow_status, block.wz)
                     wp = self.rxarm.find_best_soluton(IK_geometric(self.rxarm.dh_params, block_pose), block_elbow_status, block.wz)
                     
-                    dx = 0.15
-                    dy = 0.15
+                    dx = 0.125
+                    dy = 0.125
                     z_offset = +0.02 #
 
                     if dirs[i] == "left":
@@ -1897,13 +1901,13 @@ class StateMachine():
                     self.rxarm.set_positions(up_drop_wp)
                     rospy.sleep(2)
                     ###############################################
-                    self.rxarm.sleep()
-                    rospy.sleep(2)
+            self.rxarm.sleep()
+            rospy.sleep(2)
         # return
         print("Done unsatcking")
         ###################################################
 
-        print("Now lining up...")
+        print("Now stacking them high ...")
 
         # First, add a homepose and Open gripper
         homepose = np.array([0, 0, 0, 0, 0])
@@ -1911,17 +1915,18 @@ class StateMachine():
         self.replay_buffer.append(1)
 
         ########## Then, Line em up to the neg have plane ######
-        x_offset = 0.005 # 0.5cm
+        x_offset = 0.015 # 6mm
         phi = 0.0
         theta=0.0
+        block_h = 0.043 # 4cm
         psi = radians(80)
         dest_poses = [
-            [0.25 + 5*x_offset, -0.1, 0, phi, theta, psi],
-            [0.25 + 4*x_offset, -0.1, 0, phi, theta, psi],
-            [0.25 + 3*x_offset, -0.1, 0, phi, theta, psi],
-            [0.25 + 2*x_offset, -0.1, 0, phi, theta, psi],
-            [0.25 + x_offset  , -0.1, 0, phi, theta, psi],
-            [0.25             , -0.1, 0, phi, theta, psi]
+            [0.15 + 0*x_offset, -0.1, 0+ 0*block_h, phi, theta, psi],
+            [0.15 + 1*x_offset, -0.1, 0+ 1*block_h, phi, theta, psi],
+            [0.15 + 2*x_offset, -0.1, 0+ 2*block_h, phi, theta, psi],
+            [0.15 + 3*x_offset, -0.1, 0+ 3*block_h, phi, theta, psi],
+            [0.15 + 4*x_offset, -0.1, 0+ 4*block_h, phi, theta, psi],
+            [0.15 + 5*x_offset, -0.1, 0+ 5*block_h, phi, theta, psi]
             # [0.15             , -0.1, 0, phi, theta, psi]
         ]
         # small destinations
@@ -1956,11 +1961,11 @@ class StateMachine():
 
             ### Calculate Pick Location IK
             # Offset for inter-waypoint 
-            z_offset = 0.07 # 7cm
+            z_offset = 0.065 # 6.5 cm
             if sqrt(block.wx**2 + block.wy**2) <= 20.00/100:
-                block.wz = 0.00 # 2cm
+                block.wz = 0.027 # 2cm
             elif sqrt(block.wx**2 + block.wy**2) <= 28.00/100:
-                block.wz = 0.01 # 2cm
+                block.wz = 0.027 # 2cm
             else:
                 block.wz = 0.032 # here
             # Pick z offset depends on size
@@ -1994,18 +1999,24 @@ class StateMachine():
                 dest_first_pose = np.asarray(dest_poses_sm[index_sm])
                 index_sm += 1
 
-            # dest_z_offset = -0.008 # -0.8 cm
-            if sqrt(dest_pose[0]**2 + dest_pose[1]**2) <= 18.00/100:
-                dest_z_offset = -0.035 # -0.8 cm
-            elif sqrt(dest_pose[0]**2 + dest_pose[1]**2) <= 23.00/100:
-                dest_z_offset = -0.02 # -0.8 cm
+            if dest_pose[2] >=  5*block_h:
+                dest_z_offset = -0.02
+            elif dest_pose[2] >= 4*block_h:
+                dest_z_offset = -0.015
+            elif dest_pose[2] >= 3*block_h:
+                dest_z_offset = -0.007 # 0.6 cm lower
+            elif dest_pose[2] >= 2*block_h:
+                dest_z_offset = -0.008 # 0.8 cm lower
+            elif dest_pose[2]>= 1*block_h:
+                dest_z_offset = 0.005  # 0.5 cm higher
             else:
-                z_offset = 0.08       # interwaypoint offset: 8cm
-                dest_z_offset = +0.02 # +1.0 cm
-
-
+                dest_z_offset = 0.015  # 1cm higher
+            
             dest_pose[2] += dest_z_offset
             dest_first_pose[2] += z_offset
+
+            # dest_joint wrist rotation:
+            dest_pose[4] = 0 + (np.pi/2 - atan2(dest_pose[0], dest_pose[1]))
 
             df_elbow_status = self.get_elbow_orientation( np.array([dest_first_pose[0],dest_first_pose[1],dest_first_pose[2]])) # 0 is up, 1 is down
             df_wp = self.rxarm.find_best_soluton(IK_geometric(self.rxarm.dh_params, dest_first_pose), df_elbow_status, dest_first_pose[2])
@@ -2018,6 +2029,19 @@ class StateMachine():
             self.replay_buffer.append(1) # open            
             self.waypoints.append(df_wp)
             self.replay_buffer.append(0) # hold
+
+            df_wp2 = deepcopy(df_wp)
+            # df_wp2[1] = radians(-np.pi/6)
+            df_wp2[2] = radians(np.pi/6)
+            df_wp2[3] = 0.0
+            self.waypoints.append(df_wp2)
+            self.replay_buffer.append(0) # hold
+
+            df_wp3 = deepcopy(df_wp2)
+            df_wp3[0] = radians(0)
+            self.waypoints.append(df_wp3)
+            self.replay_buffer.append(0) # hold
+
 
 
         print("Done event 4")

@@ -290,6 +290,30 @@ class Ui_MainWindow(object):
         self.btnUser12.setAutoRepeatDelay(300)
         self.btnUser12.setObjectName(_fromUtf8("btnUser12"))
         self.Group2.addWidget(self.btnUser12)
+
+
+        self.btnUser13 = QtGui.QPushButton(self.OutputFrame)
+        self.btnUser13.setAutoRepeatDelay(300)
+        self.btnUser13.setObjectName(_fromUtf8("btnUser13"))
+        self.Group2.addWidget(self.btnUser13)
+        self.btnUser14 = QtGui.QPushButton(self.OutputFrame)
+        self.btnUser14.setAutoRepeatDelay(300)
+        self.btnUser14.setObjectName(_fromUtf8("btnUser14"))
+        self.Group2.addWidget(self.btnUser14)
+
+        self.btnUser15 = QtGui.QPushButton(self.OutputFrame)
+        self.btnUser15.setAutoRepeatDelay(300)
+        self.btnUser15.setObjectName(_fromUtf8("btnUser15"))
+        self.Group2.addWidget(self.btnUser15)
+
+        self.btnUser16 = QtGui.QPushButton(self.OutputFrame)
+        self.btnUser16.setAutoRepeatDelay(300)
+        self.btnUser16.setObjectName(_fromUtf8("btnUser16"))
+        self.Group2.addWidget(self.btnUser16)
+
+
+
+
         self.verticalLayout_5.addLayout(self.Group2)
         spacerItem = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
         self.verticalLayout_5.addItem(spacerItem)

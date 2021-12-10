@@ -11,9 +11,10 @@ The RXArm class contains:
 
 You will upgrade some functions and also implement others according to the comments given in the code.
 """
+from sys import path_importer_cache
 import numpy as np
 from functools import partial
-from kinematics import FK_dh, FK_pox, get_pose_from_T
+from kinematics import FK_dh, FK_pox, Joint_limits, get_pose_from_T, get_euler_angles_from_T, IK_geometric
 import time
 import csv
 from builtins import super
@@ -23,6 +24,10 @@ from interbotix_descriptions import interbotix_mr_descriptions as mrd
 from config_parse import *
 from sensor_msgs.msg import JointState
 import rospy
+
+
+from math import cos, sin, radians, degrees, fabs
+
 """
 TODO: Implement the missing functions and add anything you need to support them
 """
@@ -79,9 +84,14 @@ class RXArm(InterbotixRobot):
 
         # DH Params
         self.dh_params = []
+        # self.dh_params = np.array([])
         self.dh_config_file = dh_config_file
         if (dh_config_file is not None):
-            self.dh_params = RXArm.parse_dh_param_file(dh_config_file)
+            print("df file: ", dh_config_file)
+            self.dh_params = RXArm.parse_dh_param_file(self)
+
+
+            
         #POX params
         self.M_matrix = []
         self.S_list = []
@@ -189,8 +199,145 @@ class RXArm(InterbotixRobot):
         @brief      TODO Get the EE pose.
 
         @return     The EE pose as [x, y, z, phi] or as needed.
+
+        @return     The EE pose as [x, y, z, phi, Theta, Psi] or as needed.
         """
-        return [0, 0, 0, 0]
+        # 3.2 TODO: Use DH table peform Forward Kinematics Transformation
+
+        # Load DH for each frame (pass in control_station.py), use 
+        # self.dh_params (a numpy array 5*4)
+        # each row: a, alpha, d, theta for each joint
+        # joint: 0 ~ 4
+
+        # a, alpha: w.r.t the old one (diff between Z axes)
+        # d, theta: w.r.t the new one (diff between X axes)
+
+        # Get current positions
+        current_positions = self.get_positions()
+        # print("cur positions: ", current_positions)
+        # first angle is theta 1
+
+        # H01 => theta = 1 
+        # H = np.array(shape=(5, 4,4 ))
+        # Compute H01, H12, H23, H34, H4e ( H01: From 0 to 1 )
+        Hs = []
+        # print("dh: ", self.dh_params)
+        for i in range(len(self.dh_params)): # 6x4 iterate for 5 joints
+            
+            a = self.dh_params[i][0]
+            # convert a from mm to m
+            a = a / 1000.0
+            
+            alpha = self.dh_params[i][1]
+            # convert alpha from degrees to radians
+            alpha = radians(alpha)
+            
+            d = self.dh_params[i][2]
+            # convert d from mm to m
+            d = d / 1000.0
+            
+            theta = self.dh_params[i][3]
+            if i == 0: # World to base: use cur_position[0]
+                theta = degrees(current_positions[0])
+            elif i==1: # Base to Sholder: constant 90 degree
+                theta = 90 
+            elif i==2: # Sholder to elbow
+                theta =  degrees(current_positions[1]) - (90 - degrees(np.arctan(1/4))) 
+            elif i==3:
+                theta =  degrees(current_positions[2]) - (90 - degrees(np.arctan(1/4))) 
+            elif i==4: 
+                theta = degrees(current_positions[3]) + 90                 
+            elif i==5: # Wrist to ee : constant 0 degree
+                pass
+
+            # convert theta from degrees to radians
+            theta = radians(theta)
+
+            # print("i ", i, " a, alpha, d, theta, ", a," ", alpha, " ", d , " ", theta)
+
+            # Make H 0-> 1 4x4 HTM
+            H = np.array([[cos(theta), -sin(theta)*cos(alpha), sin(theta)*sin(alpha),  a*cos(theta)],
+                         [sin(theta),  cos(theta)*cos(alpha),  -cos(theta)*sin(alpha), a*sin(theta)],
+                         [         0,             sin(alpha),    cos(alpha),        d],
+                         [         0,                      0,             0,        1]])
+            Hs.append(H)
+        # while True:
+        #     pass
+
+        HW0 = Hs[0]
+        H01 = Hs[1]
+        H12 = Hs[2]
+        H23 = Hs[3]
+        H34 = Hs[4]
+        H4e = Hs[5]
+        # numpy.array so we can use @ !
+        
+        Hwe =  np.matmul(np.matmul(np.matmul(np.matmul(np.matmul(HW0,H01), H12), H23), H34), H4e)
+
+        # print("Final H world to ee: ", Hwe)
+        Translation = Hwe[0:3, 3]
+        x = Translation[0]
+        y = Translation[1]
+        z = Translation[2]
+        # print("x, y, z", x, y, z)
+
+
+        H2e = np.matmul( np.matmul(H23,H34), H4e)
+        # euler_angles = get_euler_angles_from_T(Hwe)
+        # euler_angles = get_euler_angles_from_T(Hwe)
+        # phi = euler_angles[0]
+        # theta = euler_angles[1]
+        # psi = euler_angles[2]
+        
+        joint_positions = self.get_positions()
+        phi = joint_positions[0] + np.pi/2
+        theta = joint_positions[4]
+        # Pitch = psi
+        # Psi = Shoulder - Elbow - Wrist Angle
+        psi = joint_positions[1] - joint_positions[2] - joint_positions[3]
+
+        pose = [x, y, z, phi, theta, psi]
+
+        # Pass FK pose into IK_geometry
+        # joint_calculated = IK_geometric(self.dh_params, pose)
+        # for i in range(len(joint_calculated)):
+        #     joint_calculated[i] *= R2D
+
+        # print("joint from IK: ", joint_calculated)
+
+        return pose
+        # return [0, 0, 0, 0]
+
+
+    def find_best_soluton(self, joint_angles, elbow_status, target_z):
+        # print("joint_angles: ", joint_angles)
+
+        solutions = joint_angles[elbow_status][:][:]
+        # print("solutions ", solutions)
+        for solution in solutions:
+            # print("solultion: ", solution)
+            link = 0 # we didn't use it
+            T = FK_dh(self.dh_params, solution, link)
+            ee_pos = get_pose_from_T(T)
+            # if z > 1cm and |x| > 45 cm
+            x, y, z, phi, theta, psi = ee_pos
+            # print("x, z: ", x, z)
+            if x<= 45.00/100 and x >= -45.00/100 and solution[3]<=radians(0):
+     
+            # if z > 0.00/100 and x<= 45.00/100 and x >= -45.00/100 and solution[3]<=radians(0):
+                return solution
+                # if elbow_status==0: # elbow up, discard theta3>0 solution
+                #     if solution[3] <= 0:
+                #         return solution
+                # else:
+                #     if solution[3] >= 0:
+                #         return solution
+        # if NO sol'z > 1cm: 
+        print("No valid solution")
+        return np.array([0, 0, 0, 0, 0])
+
+
+
 
     @_ensure_initialized
     def get_wrist_pose(self):
@@ -211,7 +358,7 @@ class RXArm(InterbotixRobot):
 
     def parse_dh_param_file(self):
         print("Parsing DH config file...")
-        parse_dh_param_file(self.dh_config_file)
+        dh_params = parse_dh_param_file(self.dh_config_file)
         print("DH config file parse exit.")
         return dh_params
 
@@ -243,7 +390,7 @@ class RXArmThread(QThread):
         self.rxarm = rxarm
         # define PID values
         waist_PID = [640, 0, 3600]
-        shoulder_PID = [700, 100, 0]
+        shoulder_PID = [700, 0, 0]
         elbow_PID = [700, 80, 0]
         wrist_angle_PID = [800, 0, 0]
         wrist_rotate_PID = [640, 0, 3600]
@@ -266,6 +413,9 @@ class RXArmThread(QThread):
         self.rxarm.effort_fb = np.asarray(data.effort)[0:5]
         self.updateJointReadout.emit(self.rxarm.position_fb.tolist())
         self.updateEndEffectorReadout.emit(self.rxarm.get_ee_pose())
+        # print out IK solutions for debugging
+        # joints_debug = IK_geometric(self.rxarm.dh_params, self.rxarm.get_ee_pose())
+        # print('IK joints debug = ', joints_debug * R2D)
         #for name in self.rxarm.joint_names:
         #    print("{0} gains: {1}".format(name, self.rxarm.get_motor_pid_params(name)))
         if (__name__ == '__main__'):
@@ -278,6 +428,7 @@ class RXArmThread(QThread):
         while True:
 
             rospy.spin()
+
 
 
 if __name__ == '__main__':

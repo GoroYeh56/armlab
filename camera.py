@@ -15,6 +15,19 @@ from sensor_msgs.msg import CameraInfo
 from apriltag_ros.msg import *
 from cv_bridge import CvBridge, CvBridgeError
 
+from math import radians, degrees
+
+class Block():
+    """!
+    @brief      This class describes a block
+    """
+    def __init__(self, size_, color_, wx_, wy_, wz_, ori_):
+        self.size = size_
+        self.color = color_
+        self.wx = wx_ # meter
+        self.wy = wy_
+        self.wz = wz_
+        self.ori = ori_ # in radians
 
 class Camera():
     """!
@@ -30,6 +43,8 @@ class Camera():
         """ Extra arrays for colormaping the depth image"""
         self.DepthFrameHSV = np.zeros((720, 1280, 3)).astype(np.uint8)
         self.DepthFrameRGB = np.array([])
+
+        self.BlockDetectFrame = np.zeros((720, 1280, 3)).astype(np.uint8)
 
         # mouse clicks & calibration variables
         self.cameraCalibrated = False
@@ -122,6 +137,21 @@ class Camera():
         except:
             return None
 
+    def convertQtBlockFrame(self):
+        """!
+        @brief      Converts tag image frame to format suitable for Qt
+
+        @return     QImage
+        """
+
+        try:
+            frame = cv2.resize(self.BlockDetectFrame, (1280, 720))
+            img = QImage(frame, frame.shape[1], frame.shape[0],
+                         QImage.Format_RGB888)
+            return img
+        except:
+            return None
+
     def getAffineTransform(self, coord1, coord2):
         """!
         @brief      Find the affine matrix transform between 2 sets of corresponding coordinates.
@@ -147,7 +177,7 @@ class Camera():
         pass
 
     
-    def transform_pixel_to_world(self, point):
+    def transform_pixel_to_world(self, x, y):
         """
         @brief Transform point from pixel frame to world frame
 
@@ -155,12 +185,12 @@ class Camera():
 
         @return a point in the world frame
         """
-        point_3by1 = np.vstack((point.x() , point.y() , 1))
+        point_3by1 = np.vstack((x, y , 1))
 
         A_inv = np.linalg.inv(self.intrinsic_matrix)
         pt_in_cam = np.matmul(A_inv , point_3by1)
         pt_in_world = np.matmul(np.linalg.inv(self.extrinsic_matrix) , pt_in_cam)
-        np.delete(pt_in_world , 2)
+        pt_in_world =  np.delete(pt_in_world , 2)
         return pt_in_world
 
 
@@ -171,7 +201,307 @@ class Camera():
                     TODO: Implement your block detector here. You will need to locate blocks in 3D space and put their XYZ
                     locations in self.block_detections
         """
-        pass
+
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        colors = list(( # in RGB order
+            {'id': 'red', 'color': (220, 49, 56)}, #bgr 208
+            {'id': 'orange', 'color': (255, 169, 35)},
+            {'id': 'yellow', 'color': (255, 255, 27)},
+            {'id': 'green', 'color': (60, 166, 100)},
+            {'id': 'blue', 'color': (24, 132, 241)},
+            {'id': 'violet', 'color': (110, 95, 198)}
+        ))
+
+        def retrieve_area_color(data, contour, labels):
+            mask = np.zeros(data.shape[:2], dtype="uint8")
+            cv2.drawContours(mask, [contour], -1, 255, -1)
+            mean = cv2.mean(data, mask=mask)[:3]
+            # print("mean: ", mean)
+            min_dist = (np.inf, None)
+            for label in labels:
+                d = np.linalg.norm(label["color"] - np.array(mean))
+                if d < min_dist[0]:
+                    min_dist = (d, label["id"])
+            return min_dist[1] 
+
+        # Need arguments: 
+        # image
+        # lower
+        # upper
+        # depth - depth image
+        print("In camera.blockDetector(): ")
+        image = self.VideoFrame
+        center = 940
+        width = 20
+        lower = center-width
+        upper = center+width
+        depth_image = self.DepthFrameRaw
+
+        rgb_image = image
+        cnt_image = image
+        depth_data = depth_image
+        # depth_data = cv2.imread(args["depth"], cv2.IMREAD_ANYCOLOR | cv2.IMREAD_ANYDEPTH)
+
+
+        """mask out arm & outside board"""
+        mask = np.zeros_like(self.DepthFrameRaw, dtype=np.uint8)
+
+        cv2.rectangle(mask, (180,85),(1020,680), 255, cv2.FILLED)
+        cv2.rectangle(mask, (510,79),(680,390), 0, cv2.FILLED)
+        cv2.rectangle(cnt_image, (180,85),(1020,680), (255, 0, 0), 2)
+        cv2.rectangle(cnt_image, (510,79),(680,390), (255, 0, 0), 2)
+        # cv2.imshow("mask", mask)
+
+        # threshold for depth:  thresh[i][j] = 1 if depth_data[i][j] within [lower, upper]
+        # mask: Other than robot arm: All set to 1 (255 => 8bit: 11111111)
+        # Only keeps detected area 1, others 0
+
+        # print("shape", cv2.inRange(depth_data, lower, upper).shape)
+        # print(cv2.inRange(depth_data, lower, upper))
+        thresh = cv2.bitwise_and(cv2.inRange(depth_data, lower, upper), mask)
+        # cv2.imshow("Threshold window", thresh)
+
+        kernel = np.ones((2,2), np.uint8)
+        closing = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
+        # cv2.imshow("Closing ", closing)
+        # closing = thresh
+
+        # depending on your version of OpenCV, the following line could be:
+        # contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        _, contours, _ = cv2.findContours(closing, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
+        cv2.drawContours(cnt_image, contours, -1, (0,255,255), thickness=1)
+        print("Number of contours found: ", len(contours))
+
+
+        # (cx, cy) is the (u,v) coord. in image frame
+        # World_coord(X, Y, Z, 1) = ext * intrinsic * (cx, cy, 1)
+
+        def img_to_world_coord(cx, cy):
+            intrinsic_matrix = np.array([[942.3094 , 0 , 637.3339] , [0 , 945.0566 , 357.1129] , [0 , 0 , 1]])
+            extrinsic_matrix = np.array([[-1 , 0 , -0.025] , [0 , 1 , 0.160] , [0 , 0 , 1]])
+            A_inv = np.linalg.inv(intrinsic_matrix)
+            pt_in_cam = np.matmul(A_inv , np.array([cx, cy, 1]))
+            pt_in_world = np.matmul(np.linalg.inv(extrinsic_matrix) , pt_in_cam)
+            return pt_in_world[0:3] # return x,y,z
+
+
+
+
+        Blocks = []
+
+        for contour in contours:
+            # print("countour: ",contour)
+            # print("cv2.minAreaRect(contour) ",cv2.minAreaRect(contour))
+            color = retrieve_area_color(rgb_image, contour, colors)
+            theta = cv2.minAreaRect(contour)[2]
+            block_dim = cv2.minAreaRect(contour)[1]
+            
+            # smal block = 0 , large block = 1
+            if (block_dim[0] < 40.0) and (block_dim[1] < 40.0):
+                block_size = "small"
+            else:
+                block_size = "large"
+
+            # if block_dim[0] >= 50 or block_dim[0] >= 50 or block_dim[0]<=10 or block_dim[1]<=10:
+            #     continue # too large or too small, don't append. It's outlier
+
+
+            M = cv2.moments(contour)
+            # division by zero if NOT found blocks
+            if M['m00']==0:
+                continue
+            # else: NOT 0
+            cx = int(M['m10']/M['m00'])
+            cy = int(M['m01']/M['m00'])
+            cv2.putText(cnt_image, color, (cx-30, cy+40), font, 1.0, (0,0,0), thickness=2)
+            cv2.putText(cnt_image, block_size, (cx-30, cy+60), font, 0.5, (255,0,0), thickness=2)
+            cv2.putText(cnt_image, str(int(theta)), (cx, cy), font, 0.5, (255,255,255), thickness=2)
+
+            # wx, wy, wz = img_to_world_coord(cx, cy)
+            wx, wy = self.transform_pixel_to_world(cx, cy)
+
+            z = self.DepthFrameRaw[cy][cx]
+            wz = (972.0 - z)/1000 
+
+
+            # print(color, "theta(deg) "  ,int(theta), cx, cy, " world ", wx, wy, wz)
+            
+
+            Blocks.append(Block(block_size, color, wx, wy, wz, radians(theta)) )
+            # Write cnt_image to self.BlockDetectImage
+        
+        self.BlockDetectFrame = cnt_image
+
+
+        # TODO: return: Blocks (a list of block)
+        # Each 'Block': an object that has:
+        # size(large/small), color, (world x,y,z), orientation
+        return Blocks
+
+
+        # cv2.imshow("Image window", cnt_image)
+        # k = cv2.waitKey(0)
+        # if k == 27:
+        #     cv2.destroyAllWindows()
+
+        # pass
+
+
+
+
+
+    def blockDetector_givenheight(self, center_, width_):
+        """!
+        @brief      Detect blocks from rgb
+
+                    TODO: Implement your block detector here. You will need to locate blocks in 3D space and put their XYZ
+                    locations in self.block_detections
+        """
+
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        colors = list(( # in RGB order
+            {'id': 'red', 'color': (220, 49, 56)}, #bgr 208
+            {'id': 'orange', 'color': (255, 169, 35)},
+            {'id': 'yellow', 'color': (255, 255, 27)},
+            {'id': 'green', 'color': (60, 166, 100)},
+            {'id': 'blue', 'color': (24, 132, 241)},
+            {'id': 'violet', 'color': (110, 95, 198)}
+        ))
+
+        def retrieve_area_color(data, contour, labels):
+            mask = np.zeros(data.shape[:2], dtype="uint8")
+            cv2.drawContours(mask, [contour], -1, 255, -1)
+            mean = cv2.mean(data, mask=mask)[:3]
+            # print("mean: ", mean)
+            min_dist = (np.inf, None)
+            for label in labels:
+                d = np.linalg.norm(label["color"] - np.array(mean))
+                if d < min_dist[0]:
+                    min_dist = (d, label["id"])
+            return min_dist[1] 
+
+        # Need arguments: 
+        # image
+        # lower
+        # upper
+        # depth - depth image
+        print("In camera.blockDetector(): ")
+        image = self.VideoFrame
+        center = center_
+        width = width_
+        lower = center-width
+        upper = center+width
+        depth_image = self.DepthFrameRaw
+
+        rgb_image = image
+        cnt_image = image
+        depth_data = depth_image
+        # depth_data = cv2.imread(args["depth"], cv2.IMREAD_ANYCOLOR | cv2.IMREAD_ANYDEPTH)
+
+
+        """mask out arm & outside board"""
+        mask = np.zeros_like(self.DepthFrameRaw, dtype=np.uint8)
+
+        cv2.rectangle(mask, (180,95),(1020,680), 255, cv2.FILLED)
+        cv2.rectangle(mask, (502,85),(685,403), 0, cv2.FILLED)
+        cv2.rectangle(cnt_image, (180,95),(1020,680), (255, 0, 0), 2)
+        cv2.rectangle(cnt_image, (502,85),(685,403), (255, 0, 0), 2)
+        # cv2.imshow("mask", mask)
+
+        # threshold for depth:  thresh[i][j] = 1 if depth_data[i][j] within [lower, upper]
+        # mask: Other than robot arm: All set to 1 (255 => 8bit: 11111111)
+        # Only keeps detected area 1, others 0
+
+        # print("shape", cv2.inRange(depth_data, lower, upper).shape)
+        # print(cv2.inRange(depth_data, lower, upper))
+        thresh = cv2.bitwise_and(cv2.inRange(depth_data, lower, upper), mask)
+        # cv2.imshow("Threshold window", thresh)
+
+        kernel = np.ones((2,2), np.uint8)
+        closing = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
+        # cv2.imshow("Closing ", closing)
+        # closing = thresh
+
+        # depending on your version of OpenCV, the following line could be:
+        # contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        _, contours, _ = cv2.findContours(closing, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
+        cv2.drawContours(cnt_image, contours, -1, (0,255,255), thickness=1)
+        print("Number of contours found: ", len(contours))
+
+
+        # (cx, cy) is the (u,v) coord. in image frame
+        # World_coord(X, Y, Z, 1) = ext * intrinsic * (cx, cy, 1)
+
+        def img_to_world_coord(cx, cy):
+            intrinsic_matrix = np.array([[942.3094 , 0 , 637.3339] , [0 , 945.0566 , 357.1129] , [0 , 0 , 1]])
+            extrinsic_matrix = np.array([[-1 , 0 , -0.025] , [0 , 1 , 0.160] , [0 , 0 , 1]])
+            A_inv = np.linalg.inv(intrinsic_matrix)
+            pt_in_cam = np.matmul(A_inv , np.array([cx, cy, 1]))
+            pt_in_world = np.matmul(np.linalg.inv(extrinsic_matrix) , pt_in_cam)
+            return pt_in_world[0:3] # return x,y,z
+
+
+
+
+        Blocks = []
+
+        for contour in contours:
+            # print("countour: ",contour)
+            # print("cv2.minAreaRect(contour) ",cv2.minAreaRect(contour))
+            color = retrieve_area_color(rgb_image, contour, colors)
+            theta = cv2.minAreaRect(contour)[2]
+            block_dim = cv2.minAreaRect(contour)[1]
+            
+            # smal block = 0 , large block = 1
+            if (block_dim[0] < 40.0) and (block_dim[1] < 40.0):
+                block_size = "small"
+            else:
+                block_size = "large"
+
+            if block_dim[0] >= 50 or block_dim[0] >= 50 or block_dim[0]<=10 or block_dim[1]<=10:
+                continue # too large or too small, don't append. It's outlier
+
+
+            M = cv2.moments(contour)
+            # division by zero if NOT found blocks
+            if M['m00']==0:
+                continue
+            # else: NOT 0
+            cx = int(M['m10']/M['m00'])
+            cy = int(M['m01']/M['m00'])
+            cv2.putText(cnt_image, color, (cx-30, cy+40), font, 1.0, (0,0,0), thickness=2)
+            cv2.putText(cnt_image, block_size, (cx-30, cy+60), font, 0.5, (255,0,0), thickness=2)
+            cv2.putText(cnt_image, str(int(theta)), (cx, cy), font, 0.5, (255,255,255), thickness=2)
+
+            # wx, wy, wz = img_to_world_coord(cx, cy)
+            wx, wy = self.transform_pixel_to_world(cx, cy)
+
+            z = self.DepthFrameRaw[cy][cx]
+            wz = (972.0 - z)/1000 
+
+
+            # print(color, "theta(deg) "  ,int(theta), cx, cy, " world ", wx, wy, wz)
+
+            Blocks.append(Block(block_size, color, wx, wy, wz, radians(theta)) )
+            # Write cnt_image to self.BlockDetectImage
+        
+        self.BlockDetectFrame = cnt_image
+
+
+        # TODO: return: Blocks (a list of block)
+        # Each 'Block': an object that has:
+        # size(large/small), color, (world x,y,z), orientation
+        return Blocks
+
+
+        # cv2.imshow("Image window", cnt_image)
+        # k = cv2.waitKey(0)
+        # if k == 27:
+        #     cv2.destroyAllWindows()
+
+        # pass
+
+
 
     def detectBlocksInDepthImage(self):
         """!
@@ -196,6 +526,7 @@ class ImageListener:
         except CvBridgeError as e:
             print(e)
         self.camera.VideoFrame = cv_image
+        # self.camera.BlockDetectFrame = self.camera.blockDetector()
 
 
 class TagImageListener:
@@ -258,7 +589,7 @@ class DepthListener:
 
 
 class VideoThread(QThread):
-    updateFrame = pyqtSignal(QImage, QImage, QImage)
+    updateFrame = pyqtSignal(QImage, QImage, QImage, QImage)
 
     def __init__(self, camera, parent=None):
         QThread.__init__(self, parent=parent)
@@ -281,13 +612,15 @@ class VideoThread(QThread):
             cv2.namedWindow("Image window", cv2.WINDOW_NORMAL)
             cv2.namedWindow("Depth window", cv2.WINDOW_NORMAL)
             cv2.namedWindow("Tag window", cv2.WINDOW_NORMAL)
+            cv2.namedWindow("Block window", cv2.WINDOW_NORMAL)
             time.sleep(0.5)
         while True:
             rgb_frame = self.camera.convertQtVideoFrame()
             depth_frame = self.camera.convertQtDepthFrame()
             tag_frame = self.camera.convertQtTagImageFrame()
+            block_frame = self.camera.convertQtBlockFrame()
             if ((rgb_frame != None) & (depth_frame != None)):
-                self.updateFrame.emit(rgb_frame, depth_frame, tag_frame)
+                self.updateFrame.emit(rgb_frame, depth_frame, tag_frame, block_frame)
             time.sleep(0.03)
             if __name__ == '__main__':
                 cv2.imshow(
@@ -297,6 +630,10 @@ class VideoThread(QThread):
                 cv2.imshow(
                     "Tag window",
                     cv2.cvtColor(self.camera.TagImageFrame, cv2.COLOR_RGB2BGR))
+                cv2.imshow(
+                    "Block window",
+                    cv2.cvtColor(self.camera.BlockFrame, cv2.COLOR_RGB2BGR))
+
                 cv2.waitKey(3)
                 time.sleep(0.03)
 

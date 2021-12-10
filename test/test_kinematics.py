@@ -23,9 +23,15 @@ if __name__ == '__main__':
     vclamp = np.vectorize(clamp)
 
     dh_params = parse_dh_param_file(args['dhconfig'])
+    print(dh_params)
 
     ### Add arm configurations to test here
-    fk_angles = [[0.0,           0.0,            0.0,               0.0]]
+    fk_angles = [[0.0, 0.0, 0.0,          0.0,         0.0],
+                 [0.0, 0.0, 0.0,  np.pi / 2.0,         0.0],
+                 [0.0, 0.0, 0.0, -np.pi / 2.0,         0.0], 
+                 [0.0, 0.0, 0.0,  np.pi / 2.0, np.pi / 2.0],
+                 [0.0, 0.0, 0.0, -np.pi / 2.0, np.pi / 2.0]
+    ]
     
     print('Test FK')
     fk_poses = []
@@ -38,11 +44,16 @@ if __name__ == '__main__':
                 fk_poses.append(pose)
         print()
 
+    # print('fk_poses = ', fk_poses)
+    # # Just hardcoding the fk_poses since we did our FK in a different function
+    # fk_poses =  [[0.21741, 0.11027, 0.02531, 0.0, 3.07, -2.67]]
+
     print('Test IK')
     for pose, angles in zip(fk_poses, fk_angles):
         matching_angles = False
         print('Pose: {}'.format(pose))
         options = IK_geometric(deepcopy(dh_params), pose)
+        # print(options)
         for i, joint_angles in enumerate(options):
             print('Option {}: {}'.format(i, joint_angles))
             compare = vclamp(joint_angles - angles)

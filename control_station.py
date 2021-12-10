@@ -61,6 +61,7 @@ class Gui(QMainWindow):
         """Objects Using Other Classes"""
         self.camera = Camera()
         print("Creating rx arm...")
+        print('dh config file in control station = ', dh_config_file)
         if (dh_config_file is not None):
             self.rxarm = RXArm(dh_config_file=dh_config_file)
         else:
@@ -104,6 +105,35 @@ class Gui(QMainWindow):
         self.ui.btnUser7.clicked.connect(partial(lambda: self.sm.record_open()))
         self.ui.btnUser8.setText('Record Closed')
         self.ui.btnUser8.clicked.connect(partial(lambda: self.sm.record_closed()))
+        self.ui.btnUser9.setText('Pick and Place')
+        self.ui.btnUser9.clicked.connect(partial(nxt_if_arm_init, 'pick_place'))
+        self.ui.btnUser10.setText('Detect Blocks')
+        self.ui.btnUser10.clicked.connect(partial(lambda: self.camera.blockDetector()))
+ 
+
+        ### Competition ###
+        # Event1: Pick n sort
+        self.ui.btnUser11.setText('Pick n sort')
+        self.ui.btnUser11.clicked.connect(partial(lambda: self.sm.pick_n_sort()))
+        # Event2: Pick n stack
+        self.ui.btnUser12.setText('Pick n stack')
+        self.ui.btnUser12.clicked.connect(partial(lambda: self.sm.pick_n_stack()))
+        # Event3: Line 'em' up
+        self.ui.btnUser13.setText('Line em up')
+        self.ui.btnUser13.clicked.connect(partial(lambda: self.sm.line_em_up()))
+        # Event4: Stack 'em' high
+        self.ui.btnUser14.setText('Stack em high')
+        self.ui.btnUser14.clicked.connect(partial(lambda: self.sm.stack_em_high()))
+
+        # Pick n sort stacked
+        self.ui.btnUser15.setText('pick_n_sort_stacked')
+        self.ui.btnUser15.clicked.connect(partial(lambda: self.sm.pick_n_sort_stacked()))
+
+        # Pick n sort stacked
+        self.ui.btnUser16.setText('Bonus Event')
+        self.ui.btnUser16.clicked.connect(partial(lambda: self.sm.bonus_tothesky()))
+
+
 
 
         # Sliders
@@ -151,11 +181,11 @@ class Gui(QMainWindow):
         self.ui.rdoutY.setText(str("%+.2f mm" % (1000 * pos[1])))
         self.ui.rdoutZ.setText(str("%+.2f mm" % (1000 * pos[2])))
         self.ui.rdoutPhi.setText(str("%+.2f rad" % (pos[3])))
-        #self.ui.rdoutTheta.setText(str("%+.2f" % (pos[4])))
-        #self.ui.rdoutPsi.setText(str("%+.2f" % (pos[5])))
+        self.ui.rdoutTheta.setText(str("%+.2f" % (pos[4])))
+        self.ui.rdoutPsi.setText(str("%+.2f" % (pos[5])))
 
-    @pyqtSlot(QImage, QImage, QImage)
-    def setImage(self, rgb_image, depth_image, tag_image):
+    @pyqtSlot(QImage, QImage, QImage, QImage)
+    def setImage(self, rgb_image, depth_image, tag_image, block_image):
         """!
         @brief      Display the images from the camera.
 
@@ -168,10 +198,13 @@ class Gui(QMainWindow):
             self.ui.videoDisplay.setPixmap(QPixmap.fromImage(depth_image))
         if (self.ui.radioUsr1.isChecked()):
             self.ui.videoDisplay.setPixmap(QPixmap.fromImage(tag_image))
+        if (self.ui.radioUsr2.isChecked()):
+            self.ui.videoDisplay.setPixmap(QPixmap.fromImage(block_image))
 
     """ Other callback functions attached to GUI elements"""
 
     def estop(self):
+
         self.rxarm.disable_torque()
         self.sm.set_next_state('estop')
 
@@ -231,7 +264,7 @@ class Gui(QMainWindow):
             z = self.camera.DepthFrameRaw[pt.y()][pt.x()]
             self.ui.rdoutMousePixels.setText("(%.0f,%.0f,%.0f)" %
                                              (pt.x(), pt.y(), z))
-            pt_in_world = self.camera.transform_pixel_to_world(pt)
+            pt_in_world = self.camera.transform_pixel_to_world(pt.x(), pt.y())
             self.ui.rdoutMouseWorld.setText("(%.2f,%.2f,%.2f)" %
                                             (pt_in_world[0] * 1000.0, pt_in_world[1] * 1000.0, (972.0 - z)))
 
@@ -266,6 +299,7 @@ def main(args=None):
     @brief      Starts the GUI
     """
     app = QApplication(sys.argv)
+    print('args we pass in = ', args['dhconfig'])
     app_window = Gui(dh_config_file=args['dhconfig'])
     app_window.show()
     sys.exit(app.exec_())
